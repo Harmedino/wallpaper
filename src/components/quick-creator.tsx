@@ -420,11 +420,13 @@ export function QuickCreator({ mode = "studio" }: { mode?: Mode }) {
                 : "Automatically styled · full photo preserved"
               : "Original customizable design"}
           </p>
-          {image && compatibleDevices(target).length > 0 && !usePhoto && (
-            <button className="chip mt-3" onClick={() => setPreview(true)}>
-              Preview on {screen === "desktop" ? "desktop" : "Samsung"}
-            </button>
-          )}
+          {image &&
+            compatibleDevices(target).length > 0 &&
+            (!usePhoto || (!!photoPreview && !before)) && (
+              <button className="chip mt-3" onClick={() => setPreview(true)}>
+                Preview on {screen === "desktop" ? "desktop" : "Samsung"}
+              </button>
+            )}
         </section>
         <section className="quick-settings">
           <h2>1. Choose your starting point</h2>
@@ -807,7 +809,7 @@ export function QuickCreator({ mode = "studio" }: { mode?: Mode }) {
         <PhonePreview
           wallpaper={{
             id: "template",
-            title: name || "Your design",
+            title: usePhoto ? "Your styled wallpaper" : name || "Your design",
             imageSrc: image,
             ...target,
           }}

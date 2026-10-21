@@ -130,7 +130,17 @@ test("simple photo creator previews cinematic effects and exports full portrait 
       .toBuffer(),
   });
   await page.getByRole("button", { name: "Fire & ice", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Preview on Samsung", exact: true })
+    .click();
+  await expect(page.getByRole("dialog").locator(".one-ui-7")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Close phone preview", exact: true })
+    .click();
   await page.getByLabel("Your screen", { exact: true }).selectOption("4k");
+  await expect(
+    page.getByRole("button", { name: "Preview on Samsung", exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByAltText("Your wallpaper design")).toBeVisible();
   await page
     .getByRole("button", { name: "Create wallpaper", exact: true })
