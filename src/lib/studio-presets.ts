@@ -63,6 +63,46 @@ export const backgrounds = [
   { id: "arches", name: "Desert arches", a: "#e2bb91", b: "#9b5548" },
 ] as const;
 export const textFonts = {
+  cinzel: { label: "Cinzel", family: "Cinzel", file: "Cinzel[wght].ttf" },
+  comfortaa: {
+    label: "Comfortaa",
+    family: "Comfortaa",
+    file: "Comfortaa[wght].ttf",
+  },
+  anton: { label: "Anton", family: "Anton", file: "Anton-Regular.ttf" },
+  abrilfatface: {
+    label: "Abril Fatface",
+    family: "Abril Fatface",
+    file: "AbrilFatface-Regular.ttf",
+  },
+  caveat: { label: "Caveat", family: "Caveat", file: "Caveat[wght].ttf" },
+  spacegrotesk: {
+    label: "Space Grotesk",
+    family: "Space Grotesk",
+    file: "SpaceGrotesk[wght].ttf",
+  },
+  playfairdisplay: {
+    label: "Playfair Display",
+    family: "Playfair Display",
+    file: "PlayfairDisplay[wght].ttf",
+  },
+  oswald: { label: "Oswald", family: "Oswald", file: "Oswald[wght].ttf" },
+  dancingscript: {
+    label: "Dancing Script",
+    family: "Dancing Script",
+    file: "DancingScript[wght].ttf",
+  },
+  bebasneue: {
+    label: "Bebas Neue",
+    family: "Bebas Neue",
+    file: "BebasNeue-Regular.ttf",
+  },
+  pacifico: {
+    label: "Pacifico",
+    family: "Pacifico",
+    file: "Pacifico-Regular.ttf",
+  },
+  lobster: { label: "Lobster", family: "Lobster", file: "Lobster-Regular.ttf" },
   monoItalic: {
     label: "Typewriter italic",
     family: "DejaVu Sans Mono Oblique",

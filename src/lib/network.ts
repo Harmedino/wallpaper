@@ -5,6 +5,7 @@ const defaultHosts = [
   "api.openverse.org",
   "commons.wikimedia.org",
   "upload.wikimedia.org",
+  "thumb.wikimedia.org",
   "images-api.nasa.gov",
   "images-assets.nasa.gov",
   "api.replicate.com",
@@ -60,7 +61,7 @@ export async function remote(url: string, max = 20 * 1024 * 1024) {
       headers: {
         "User-Agent":
           process.env.SOURCE_USER_AGENT ||
-          "WallpaperDevelopment/1.0 (configure SOURCE_USER_AGENT with contact email)",
+          "Wallspace/1.0 (+https://github.com/Harmedino/wallpaper)",
       },
     });
     if (r.status >= 300 && r.status < 400) {

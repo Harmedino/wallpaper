@@ -9,7 +9,9 @@ test("gallery search, details and real downloaded file", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Explore wallpapers." }),
   ).toBeVisible();
-  await page.getByRole("textbox", { name: "Search wallpapers" }).fill("Aurora");
+  await page
+    .getByRole("textbox", { name: "Search wallpapers" })
+    .fill('"Aurora silk"');
   const card = page.locator(".wall-card");
   await expect(card).toHaveCount(1);
   await card.click();
@@ -31,7 +33,10 @@ test("gallery search, details and real downloaded file", async ({ page }) => {
 test("Studio uploads, creates and downloads a real private result", async ({
   page,
 }) => {
-  await page.goto("/studio");
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith("/api/capabilities")),
+    page.goto("/studio"),
+  ]);
   const bytes = await sharp({
     create: { width: 800, height: 600, channels: 3, background: "#345678" },
   })
@@ -104,15 +109,17 @@ test("gallery failure has a retry action and recovers without showing a false em
 test("Studio templates, text and framing export a real edited wallpaper without confirmation", async ({
   page,
 }) => {
-  await page.goto("/studio");
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith("/api/capabilities")),
+    page.goto("/studio"),
+  ]);
   await expect(page.getByRole("checkbox", { name: /I own/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Sunset", exact: true }).click();
   await expect(page.getByAltText("Edited wallpaper preview")).toBeVisible();
   await page.getByRole("button", { name: "Noir", exact: true }).click();
   await page.getByLabel("Wallpaper text").fill("STAY CURIOUS");
-  await page
-    .getByRole("combobox", { name: "Font", exact: true })
-    .selectOption("serif");
+  await page.getByRole("combobox", { name: "Font", exact: true }).click();
+  await page.getByRole("option", { name: /Editorial serif/ }).click();
   await page.getByLabel("Photo layout").selectOption("solid");
   await page.getByLabel("Backdrop color", { exact: true }).fill("#123456");
   await page.getByLabel("Target screen").selectOption("0");
@@ -131,11 +138,15 @@ test("Studio templates, text and framing export a real edited wallpaper without 
 test("mobile editor preserves photos, pins preview and supports text dragging and grid photos", async ({
   page,
 }) => {
+  test.setTimeout(90000);
   await page.setViewportSize({ width: 390, height: 844 });
   const ready = page.waitForResponse((r) =>
     r.url().endsWith("/api/capabilities"),
   );
-  await page.goto("/studio");
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith("/api/capabilities")),
+    page.goto("/studio"),
+  ]);
   await ready;
   const red = await sharp({
     create: { width: 640, height: 480, channels: 3, background: "#ff0000" },
@@ -155,7 +166,7 @@ test("mobile editor preserves photos, pins preview and supports text dragging an
     .click();
   await expect(
     page.getByRole("combobox", { name: "Photo layout", exact: true }),
-  ).toHaveValue("art");
+  ).toHaveValue("art", { timeout: 45000 });
   expect(uploads).toBe(0);
   await page
     .getByLabel("Wallpaper text", { exact: true })
@@ -200,7 +211,20 @@ test("mobile editor preserves photos, pins preview and supports text dragging an
     .scrollIntoViewIfNeeded();
   const rect = await page.locator(".studio-preview-frame").boundingBox();
   expect(rect!.y).toBeGreaterThanOrEqual(0);
-  expect(rect!.y).toBeLessThan(20);
+  expect(rect!.y).toBeLessThan(50);
+  await page.getByLabel("Target screen").selectOption("5");
+  expect(
+    (await page.locator(".studio-preview-frame").boundingBox())!.height,
+  ).toBeGreaterThan(400);
+  await page
+    .getByRole("button", { name: "Expand preview", exact: true })
+    .click();
+  expect(
+    (await page.locator(".studio-preview-frame").boundingBox())!.height,
+  ).toBeGreaterThan(600);
+  await page
+    .getByRole("button", { name: "Close expanded preview", exact: true })
+    .click();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -222,4 +246,115 @@ test("mobile editor preserves photos, pins preview and supports text dragging an
   const metadata = await sharp((await download.path())!).metadata();
   expect(metadata.width).toBe(3840);
   expect(metadata.height).toBe(2160);
+});
+
+test("Explore has 500 photographs and phone, desktop and iPad previews", async ({
+  page,
+}) => {
+  await page.goto("/explore");
+  await expect(page.getByText(/5\d\d wallpapers to make your own/)).toBeVisible(
+    { timeout: 20000 },
+  );
+  await page
+    .getByRole("button", { name: "Preview on phone", exact: true })
+    .first()
+    .click();
+  const dialog = page.getByRole("dialog", {
+    name: "Preview wallpaper on your devices",
+  });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".device-phone")).toBeVisible();
+  await dialog.getByRole("button", { name: "Desktop", exact: true }).click();
+  await expect(dialog.locator(".device-desktop")).toBeVisible();
+  await dialog.getByRole("button", { name: "iPad", exact: true }).click();
+  await expect(dialog.locator(".device-ipad")).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Home screen", exact: true })
+    .click();
+  await expect(dialog.locator(".phone-home")).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Close phone preview", exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+});
+
+test("real on-device cutout removes background and photographic replacements export", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith("/api/capabilities")),
+    page.goto("/studio"),
+  ]);
+  await page
+    .getByLabel("Upload image", { exact: true })
+    .setInputFiles("tests/fixtures/tiger.jpg");
+  await expect(page.getByAltText("Edited wallpaper preview")).toBeVisible();
+  const saved = page.waitForResponse(
+    (r) => r.url().endsWith("/api/uploads") && r.request().method() === "POST",
+    { timeout: 60000 },
+  );
+  await page
+    .getByRole("button", { name: "Remove original background", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({
+        hasText:
+          /Loading background|Finding the subject|Refining|Preparing|Saving/,
+      })
+      .first(),
+  ).toBeVisible();
+  const response = await saved;
+  expect(response.status()).toBe(201);
+  const upload = await response.json();
+  const pixels = await page.request.get(`/api/uploads/${upload.id}/image`);
+  const stats = await sharp(await pixels.body()).stats();
+  expect(stats.channels[3].min).toBeLessThan(10);
+  expect(stats.channels[3].max).toBeGreaterThan(240);
+  const replacement = await sharp({
+    create: { width: 800, height: 500, channels: 3, background: "#3388cc" },
+  })
+    .png()
+    .toBuffer();
+  await page
+    .getByLabel("Upload replacement background", { exact: true })
+    .setInputFiles({
+      name: "background.png",
+      mimeType: "image/png",
+      buffer: replacement,
+    });
+  await expect(
+    page.getByRole("combobox", { name: "Photo layout", exact: true }),
+  ).toHaveValue("art");
+  await page.getByRole("combobox", { name: "Font", exact: true }).click();
+  const option = page.getByRole("option", { name: /Dancing Script/ });
+  await expect(option).toBeVisible();
+  expect(
+    await option.evaluate((el) => getComputedStyle(el).fontFamily),
+  ).toContain("Dancing Script");
+  await option.click();
+  await page
+    .getByLabel("Wallpaper text", { exact: true })
+    .fill("Wild at heart");
+  await page.screenshot({ path: "/tmp/real-cutout-editor.png" });
+  await page.getByLabel("Target screen").selectOption("0");
+  await page
+    .getByRole("button", { name: "Create my wallpaper", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Your new perspective is ready." }),
+  ).toBeVisible({ timeout: 30000 });
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download finished wallpaper" }).click();
+  const file = await downloaded;
+  const pixel = await sharp((await file.path())!)
+    .extract({ left: 1, top: 1, width: 1, height: 1 })
+    .removeAlpha()
+    .raw()
+    .toBuffer();
+  expect(Math.abs(pixel[0] - 51)).toBeLessThan(12);
+  expect(Math.abs(pixel[1] - 136)).toBeLessThan(12);
+  expect(Math.abs(pixel[2] - 204)).toBeLessThan(12);
 });

@@ -1,10 +1,21 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, Check, Info } from "lucide-react";
 import { resolutions } from "@/lib/constants";
 import { Button } from "./ui/button";
 export function DownloadPanel({ id }: { id: string }) {
   const [index, setIndex] = useState(2);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("device") === "ipad") {
+      setIndex(8);
+      return;
+    }
+    if (
+      new URLSearchParams(window.location.search).get("orientation") ===
+      "portrait"
+    )
+      setIndex(5);
+  }, []);
   const [format, setFormat] = useState("jpg");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);

@@ -25,7 +25,7 @@ async function runDiscovery(id: string, query: string) {
     }));
   } else if (id === "commons") {
     const data = await remoteJson(
-      `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrsearch=${q}&gsrnamespace=6&gsrlimit=20&prop=imageinfo&iiprop=url%7Csize%7Cextmetadata`,
+      `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrsearch=${q}&gsrnamespace=6&gsrlimit=50&prop=imageinfo&iiprop=url%7Csize%7Cextmetadata`,
     );
     rows = Object.values(data.query?.pages || {}).flatMap((p: any) => {
       const r = p.imageinfo?.[0];
@@ -116,7 +116,7 @@ async function runDiscovery(id: string, query: string) {
         update: {},
       }));
     if (!existing) added++;
-    if (published < 3 && candidate.status === "pending") {
+    if (published < 8 && candidate.status === "pending") {
       try {
         if (await publishCandidate(candidate)) published++;
       } catch (e) {

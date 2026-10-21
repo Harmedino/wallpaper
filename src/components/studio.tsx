@@ -11,7 +11,8 @@ import {
   Smartphone,
 } from "lucide-react";
 import Link from "next/link";
-import { looks, backgrounds, textFonts } from "@/lib/studio-presets";
+import { FontPicker } from "./font-picker";
+import { looks, backgrounds } from "@/lib/studio-presets";
 import { backgroundSvg } from "@/lib/backgrounds-svg";
 import { resolutions } from "@/lib/constants";
 import { Button } from "./ui/button";
@@ -39,6 +40,11 @@ export function Studio() {
       .catch(() => {});
   }, []);
   const [upload, setUpload] = useState<Upload | null>(null);
+  const [backgroundPhoto, setBackgroundPhoto] = useState<Upload | null>(null);
+  const [originalPhoto, setOriginalPhoto] = useState<Upload | null>(null);
+  const [cutoutDone, setCutoutDone] = useState(false);
+  const [cutoutProgress, setCutoutProgress] = useState("");
+  const backgroundFileRef = useRef<HTMLInputElement>(null);
   const [backgroundTemplate, setBackgroundTemplate] = useState("aurora");
   const [sourceKind, setSourceKind] = useState("photo");
   const [grid, setGrid] = useState("single");
@@ -81,6 +87,7 @@ export function Studio() {
     align: "center",
     shadow: true,
   });
+  const [previewExpanded, setPreviewExpanded] = useState(false);
   const [preview, setPreview] = useState("");
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState("");
@@ -126,6 +133,8 @@ export function Studio() {
       setPreview("");
       setUpload(d);
       setSourceKind("photo");
+      setOriginalPhoto(d);
+      setCutoutDone(false);
       setX(0.5);
       setY(0.5);
     } catch (e) {
@@ -161,14 +170,71 @@ export function Studio() {
       if (collageRef.current) collageRef.current.value = "";
     }
   }
+  async function ensureSubject() {
+    if (cutoutDone || !upload || sourceKind !== "photo") return;
+    const { cutout } = await import("@/lib/cutout");
+    const response = await fetch(
+      `/api/uploads/${(originalPhoto || upload).id}/image`,
+    );
+    if (!response.ok) throw new Error("Could not load original photo");
+    const subject = await cutout(await response.blob(), setCutoutProgress);
+    setCutoutProgress("Saving your cutout…");
+    const body = new FormData();
+    body.set("file", subject, "subject.webp");
+    const r = await fetch("/api/uploads", { method: "POST", body });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    setUpload(d);
+    setCutoutDone(true);
+  }
+  async function chooseBackgroundPhoto(file?: File) {
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (file.size > caps.uploadMb * 1024 * 1024)
+        throw new Error(`Choose a background under ${caps.uploadMb} MB`);
+      setCutoutProgress("Uploading new background…");
+      const body = new FormData();
+      body.set("file", file);
+      const r = await fetch("/api/uploads", { method: "POST", body });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      await ensureSubject();
+      setBackgroundPhoto(d);
+      setBackgroundMode("art");
+      setPadding(0);
+      setJob(null);
+      if (!upload) {
+        setUpload(d);
+        setSourceKind("background");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not replace background");
+    } finally {
+      setBusy(false);
+      setCutoutProgress("");
+      if (backgroundFileRef.current) backgroundFileRef.current.value = "";
+    }
+  }
   async function useBackground(template: string) {
     setBackgroundTemplate(template);
+    setBackgroundPhoto(null);
     if (upload && sourceKind === "photo") {
-      setBackgroundMode("art");
-      setJob(null);
+      setBusy(true);
+      setError("");
+      try {
+        await ensureSubject();
+        setBackgroundMode("art");
+        setJob(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Background removal failed");
+      } finally {
+        setBusy(false);
+        setCutoutProgress("");
+      }
       return;
     }
-
     setBusy(true);
     setError("");
     setJob(null);
@@ -193,6 +259,11 @@ export function Studio() {
     }
   }
   function resetEdits() {
+    if (originalPhoto && cutoutDone) {
+      setUpload(originalPhoto);
+      setCutoutDone(false);
+    }
+    setBackgroundPhoto(null);
     setBrightness(1);
     setSaturation(1);
     setContrast(1);
@@ -235,6 +306,7 @@ export function Studio() {
     cinematic,
     backgroundMode,
     backgroundTemplate,
+    backgroundPhotoId: backgroundPhoto?.id,
     grid,
     photoIds: photos.map((p) => p.id),
     backgroundColor,
@@ -250,8 +322,8 @@ export function Studio() {
   useEffect(() => {
     if (!upload) return;
     const c = new AbortController();
+    setPreviewBusy(true);
     const timer = setTimeout(async () => {
-      setPreviewBusy(true);
       setPreviewError("");
       try {
         const r = await fetch("/api/studio/preview", {
@@ -316,6 +388,7 @@ export function Studio() {
             cinematic,
             backgroundMode,
             backgroundTemplate,
+            backgroundPhotoId: backgroundPhoto?.id,
             grid,
             photoIds: photos.map((p) => p.id),
             backgroundColor,
@@ -372,7 +445,18 @@ export function Studio() {
           super-resolution is available when a processing provider is connected.
         </p>
       </div>
-      <div className={"studio-grid " + (upload ? "has-upload" : "")}>
+      <div
+        style={
+          {
+            "--canvas-ratio": target.width / target.height,
+          } as React.CSSProperties
+        }
+        className={
+          "studio-grid " +
+          (upload ? "has-upload" : "") +
+          (previewExpanded ? " preview-expanded" : "")
+        }
+      >
         <div className={"studio-canvas-column " + (job ? "has-result" : "")}>
           <div className="panel">
             <div className="flex justify-between text-xs text-slate-400 mb-5">
@@ -385,7 +469,7 @@ export function Studio() {
             </div>
             <div className="studio-template-strip">
               <p className="text-xs muted mb-3">
-                Illustrated backgrounds · your photo stays on top
+                Replace your background · AI keeps the subject
               </p>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {backgrounds.map((b) => (
@@ -448,6 +532,24 @@ export function Studio() {
                     maxWidth: "100%",
                   }}
                 >
+                  {(previewBusy || busy) && (
+                    <div className="studio-preview-loading" role="status">
+                      <span className="studio-spinner" />
+                      {cutoutProgress ||
+                        (busy ? "Preparing image…" : "Updating preview…")}
+                    </div>
+                  )}
+                  <button
+                    className="studio-expand-preview"
+                    aria-label={
+                      previewExpanded
+                        ? "Close expanded preview"
+                        : "Expand preview"
+                    }
+                    onClick={() => setPreviewExpanded(!previewExpanded)}
+                  >
+                    {previewExpanded ? "✕ Back to editing" : "⛶ Expand preview"}
+                  </button>
                   <img
                     draggable={false}
                     src={preview || `/api/uploads/${upload.id}/image`}
@@ -979,7 +1081,67 @@ export function Studio() {
                 </button>
               ))}
             </div>
-            <h2>Background & framing</h2>
+            <h2>Replace image background</h2>
+            <p className="text-xs muted mb-3">
+              AI separates the subject from its original background. Use your
+              own image or choose an illustrated scene. Fine hair and
+              transparent objects may need a cleaner source photo.
+            </p>
+            <input
+              type="file"
+              className="hidden"
+              ref={backgroundFileRef}
+              accept="image/jpeg,image/png,image/webp"
+              aria-label="Upload replacement background"
+              onChange={(e) => chooseBackgroundPhoto(e.target.files?.[0])}
+            />
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                className="chip"
+                disabled={busy}
+                onClick={() => backgroundFileRef.current?.click()}
+              >
+                Upload background image
+              </button>
+              <button
+                className="chip"
+                disabled={
+                  busy || !upload || sourceKind !== "photo" || cutoutDone
+                }
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  try {
+                    await ensureSubject();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "Cutout failed");
+                  } finally {
+                    setBusy(false);
+                    setCutoutProgress("");
+                  }
+                }}
+              >
+                Remove original background
+              </button>
+              {originalPhoto && cutoutDone && (
+                <button
+                  className="chip"
+                  onClick={() => {
+                    setUpload(originalPhoto);
+                    setCutoutDone(false);
+                    setBackgroundMode("crop");
+                  }}
+                >
+                  Restore original photo
+                </button>
+              )}
+            </div>
+            {cutoutProgress && (
+              <p role="status" className="text-xs text-teal-200 mb-4">
+                {cutoutProgress}
+              </p>
+            )}
+            <h2>Framing & layout</h2>
             <label className="field mb-4">
               Photo layout
               <select
@@ -1097,19 +1259,10 @@ export function Studio() {
               />
             </label>
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <label className="field">
-                Font
-                <select
-                  value={text.font}
-                  onChange={(e) => setText({ ...text, font: e.target.value })}
-                >
-                  {Object.entries(textFonts).map(([id, f]) => (
-                    <option key={id} value={id}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <FontPicker
+                value={text.font}
+                onChange={(font) => setText({ ...text, font })}
+              />
               <label className="field">
                 Text color
                 <input

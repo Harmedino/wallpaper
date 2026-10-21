@@ -53,8 +53,13 @@ try {
   }
   assert.ok(ready, "Test web server did not become ready: " + output);
   const gallery = await (await fetch(base + "/api/wallpapers")).json();
-  assert.ok(gallery.total >= 9);
-  const starter = gallery.items.find(
+  assert.ok(gallery.total >= 500);
+  const originals = await (
+    await fetch(
+      base + "/api/wallpapers?q=" + encodeURIComponent('"Aurora silk"'),
+    )
+  ).json();
+  const starter = originals.items.find(
     (w: any) => w.source === "original procedural artwork",
   );
   assert.ok(starter);

@@ -24,6 +24,7 @@ export const optionsSchema = z
     cinematic: z.boolean().default(false),
     ai: z.boolean().default(false),
     backgroundMode: z.enum(["crop", "blur", "solid", "art"]).default("crop"),
+    backgroundPhotoId: z.string().min(1).max(100).optional(),
     backgroundTemplate: z.enum(backgroundIds).default("aurora"),
     grid: z
       .enum(["single", "duo", "triptych", "quad", "mosaic"])
@@ -110,6 +111,8 @@ export async function render(
   photos: Buffer[] = [],
 ) {
   const o = optionsSchema.parse(input);
+  const backgroundPhoto = o.backgroundPhotoId ? photos.at(-1) : undefined;
+  const gridPhotos = o.backgroundPhotoId ? photos.slice(0, -1) : photos;
   let original = bytes;
   if (o.rotation || o.flip || o.flop) {
     let rotated = sharp(bytes).rotate(o.rotation);
@@ -148,7 +151,11 @@ export async function render(
     }
     image =
       o.backgroundMode === "art"
-        ? sharp(await createBackground(o.backgroundTemplate, o.width, o.height))
+        ? backgroundPhoto
+          ? sharp(backgroundPhoto).resize(o.width, o.height, { fit: "cover" })
+          : sharp(
+              await createBackground(o.backgroundTemplate, o.width, o.height),
+            )
         : o.backgroundMode === "blur"
           ? sharp(original).resize(o.width, o.height, { fit: "cover" }).blur(30)
           : sharp({
@@ -184,7 +191,7 @@ export async function render(
           [0.6, 0.5, 0.4, 0.5],
         ],
       };
-      const sources = [original, ...photos];
+      const sources = [original, ...gridPhotos];
       const gap = Math.max(
         2,
         Math.round((Math.min(o.width, o.height) * o.padding) / 2),

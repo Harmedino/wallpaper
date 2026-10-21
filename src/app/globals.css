@@ -1072,3 +1072,446 @@ header {
     height: 26px;
   }
 }
+
+.studio-expand-preview {
+  display: none;
+}
+@media (max-width: 900px) {
+  .studio-grid.has-upload {
+    padding-top: calc(
+      min(55svh, calc((100vw - 16px) / var(--canvas-ratio, 1.777))) + 60px
+    );
+  }
+  .studio-grid.has-upload .studio-preview-frame {
+    top: 40px;
+    width: min(
+      calc(100vw - 16px),
+      calc(55svh * var(--canvas-ratio))
+    ) !important;
+    max-height: none !important;
+    max-width: calc(100vw - 16px) !important;
+  }
+  .studio-expand-preview {
+    display: block;
+    position: absolute;
+    right: 0;
+    top: -34px;
+    z-index: 4;
+    font-size: 12px;
+    background: #18392f;
+    color: #ceffed;
+    padding: 7px 12px;
+    border: 1px solid #6ce4bc60;
+    border-radius: 8px;
+  }
+  .studio-grid.preview-expanded::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: #050b09fa;
+    z-index: 60;
+  }
+  .studio-grid.preview-expanded .studio-preview-frame {
+    z-index: 61;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(
+      calc(100vw - 16px),
+      calc(86svh * var(--canvas-ratio))
+    ) !important;
+  }
+}
+.studio-preview-loading {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 20px;
+  background: #071512df;
+  color: #b8ffe8;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.studio-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid #b8ffe83a;
+  border-top-color: #b8ffe8;
+  border-radius: 50%;
+  animation: studio-spin 0.8s linear infinite;
+}
+@keyframes studio-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.font-picker {
+  position: relative;
+  min-width: 0;
+}
+.font-picker-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ffffff20;
+  border-radius: 10px;
+  background: #14201c;
+  font-size: 18px;
+  min-height: 48px;
+}
+.font-picker-popup {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  width: min(340px, 75vw);
+  z-index: 45;
+  background: #15231e;
+  border: 1px solid #7debc350;
+  border-radius: 12px;
+  box-shadow: 0 12px 35px #0009;
+  padding: 8px;
+}
+.font-picker-popup input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ffffff25;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: #091410;
+}
+.font-picker-popup [role="listbox"] {
+  max-height: 320px;
+  overflow-y: auto;
+}
+.font-picker-popup [role="option"] {
+  display: block;
+  text-align: left;
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 20px;
+}
+.font-picker-popup [role="option"]:hover,
+.font-picker-popup [role="option"]:focus,
+.font-picker-popup [aria-selected="true"] {
+  background: #284b3d;
+  outline-color: #9cffe1;
+}
+.font-picker-sample {
+  display: block;
+  font-size: 17px;
+  opacity: 0.6;
+  margin-top: 4px;
+}
+.wall-phone-preview {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  padding: 10px 16px;
+  color: #b3dcca;
+  font-size: 12px;
+  border-top: 1px solid #ffffff12;
+  width: 100%;
+}
+.phone-preview-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-width: 960px;
+  width: 96vw;
+  max-height: 96svh;
+  overflow: auto;
+  padding: 0;
+  border: 1px solid #6c9a8560;
+  border-radius: 24px;
+  background: #0d1914;
+  color: #ecfff5;
+}
+.phone-preview-dialog::backdrop {
+  background: #000c;
+  backdrop-filter: blur(8px);
+}
+.phone-preview-content {
+  padding: 24px;
+  text-align: center;
+  position: relative;
+}
+.phone-preview-content h2 {
+  font-size: 22px;
+  padding: 0 30px;
+}
+.phone-preview-close {
+  position: absolute;
+  right: 16px;
+  top: 12px;
+  padding: 10px;
+}
+.phone-mockup {
+  position: relative;
+  width: min(250px, 58vw);
+  aspect-ratio: 9/19.5;
+  border: 8px solid #282d2b;
+  border-radius: 38px;
+  overflow: hidden;
+  margin: auto;
+  box-shadow: 0 20px 50px #0008;
+  color: white;
+}
+.phone-mockup > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.phone-island {
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30%;
+  height: 18px;
+  border-radius: 20px;
+  background: #131715;
+}
+.phone-lock {
+  position: absolute;
+  inset: 18% 5% auto;
+  text-align: center;
+  text-shadow: 0 2px 12px #0008;
+}
+.phone-lock p {
+  font-size: 12px;
+}
+.phone-lock strong {
+  display: block;
+  font-size: 58px;
+  line-height: 1.25;
+  letter-spacing: -4px;
+}
+.phone-lock > span {
+  font-size: 10px;
+}
+.phone-home-bar {
+  position: absolute;
+  bottom: 7px;
+  height: 4px;
+  width: 35%;
+  left: 32.5%;
+  background: #fffd;
+  border-radius: 5px;
+}
+.phone-home {
+  position: absolute;
+  inset: 14% 8% 4%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.phone-widget {
+  text-align: left;
+  padding: 12px;
+  background: #fff2;
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+  font-size: 12px;
+}
+.phone-apps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.phone-apps > span {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  background: #ffffff5e;
+  backdrop-filter: blur(6px);
+  border-radius: 13px;
+  font-size: 24px;
+}
+.phone-dock {
+  background: #fff4;
+  border-radius: 18px;
+  padding: 10px;
+  font-size: 22px;
+  backdrop-filter: blur(8px);
+}
+.device-desktop {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 12px;
+  border-width: 10px;
+}
+.device-desktop .phone-island {
+  display: none;
+}
+.device-desktop .phone-lock {
+  inset: 25% 5% auto;
+}
+.device-desktop .phone-apps {
+  width: 30%;
+  gap: 8px;
+}
+.device-desktop .phone-apps > span {
+  border-radius: 6px;
+  font-size: 16px;
+}
+.device-desktop .phone-widget {
+  width: 40%;
+}
+.device-desktop .phone-dock {
+  font-size: 16px;
+  width: 50%;
+  margin: auto;
+}
+.device-desktop .phone-lock strong {
+  font-size: clamp(32px, 7vw, 72px);
+}
+.device-ipad {
+  width: min(520px, 100%);
+  aspect-ratio: 4/3;
+  border-radius: 20px;
+  border-width: 12px;
+}
+.device-ipad .phone-island {
+  display: none;
+}
+.device-ipad .phone-apps {
+  width: 65%;
+  margin: auto;
+}
+.device-ipad .phone-dock {
+  width: 70%;
+  margin: auto;
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/fonts/SpaceGrotesk%5Bwght%5D.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Playfair Display";
+  src: url("/fonts/PlayfairDisplay%5Bwght%5D.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Oswald";
+  src: url("/fonts/Oswald%5Bwght%5D.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Dancing Script";
+  src: url("/fonts/DancingScript%5Bwght%5D.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("/fonts/BebasNeue-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Pacifico";
+  src: url("/fonts/Pacifico-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Lobster";
+  src: url("/fonts/Lobster-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Sans Mono Oblique";
+  src: url("/fonts/DejaVuSansMono-Oblique.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Sans Mono Bold";
+  src: url("/fonts/DejaVuSansMono-Bold.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Serif Bold Italic";
+  src: url("/fonts/DejaVuSerif-BoldItalic.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Serif Italic";
+  src: url("/fonts/DejaVuSerif-Italic.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Serif Bold";
+  src: url("/fonts/DejaVuSerif-Bold.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Sans Condensed Bold";
+  src: url("/fonts/DejaVuSansCondensed-Bold.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Sans Oblique";
+  src: url("/fonts/DejaVuSans-Oblique.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Sans ExtraLight";
+  src: url("/fonts/DejaVuSans-ExtraLight.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Sans Bold";
+  src: url("/fonts/DejaVuSans-Bold.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Sans";
+  src: url("/fonts/StudioSans.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Serif";
+  src: url("/fonts/StudioSerif.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "DejaVu Sans Mono";
+  src: url("/fonts/StudioMono.ttf") format("truetype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Cinzel";
+  src: url("/fonts/Cinzel%5Bwght%5D.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Comfortaa";
+  src: url("/fonts/Comfortaa%5Bwght%5D.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Anton";
+  src: url("/fonts/Anton-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Abril Fatface";
+  src: url("/fonts/AbrilFatface-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Caveat";
+  src: url("/fonts/Caveat%5Bwght%5D.ttf") format("truetype");
+  font-display: swap;
+}

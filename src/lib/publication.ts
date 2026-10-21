@@ -24,6 +24,13 @@ export function canAutoPublish(c: any) {
 }
 export async function publishCandidate(c: any) {
   if (!canAutoPublish(c)) return false;
+  if (await db.wallpaper.findUnique({ where: { sourceUrl: c.sourceUrl } })) {
+    await db.candidate.update({
+      where: { id: c.id },
+      data: { status: "duplicate" },
+    });
+    return false;
+  }
   const clean = await validateImage(await remote(c.imageUrl));
   if (await db.wallpaper.findUnique({ where: { hash: clean.hash } })) {
     await db.candidate.update({

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { PhonePreview } from "./phone-preview";
 import {
   ArrowUpRight,
   Search,
@@ -49,6 +50,7 @@ export function Gallery({
   initialCategory?: string;
   compact?: boolean;
 }) {
+  const [phonePreview, setPhonePreview] = useState<Wallpaper | null>(null);
   const [query, setQuery] = useState(""),
     [category, setCategory] = useState(initialCategory),
     [orientation, setOrientation] = useState(""),
@@ -60,6 +62,7 @@ export function Gallery({
       items: Wallpaper[];
       total: number;
       pages: number;
+      refreshing?: boolean;
     }>({ items: [], total: 0, pages: 0 }),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
@@ -73,6 +76,7 @@ export function Gallery({
   }, []);
   useEffect(() => {
     const c = new AbortController();
+    setLoading(true);
     const t = setTimeout(async () => {
       setLoading(true);
       setError("");
@@ -104,6 +108,11 @@ export function Gallery({
       c.abort();
     };
   }, [query, category, orientation, color, resolution, sort, page, retry]);
+  useEffect(() => {
+    if (!data.refreshing) return;
+    const timer = setTimeout(() => setRetry((n) => n + 1), 8000);
+    return () => clearTimeout(timer);
+  }, [data]);
   function reset() {
     setQuery("");
     setCategory("");
@@ -416,54 +425,74 @@ export function Gallery({
       ) : (
         <div className={"wall-grid " + (dense ? "dense" : "")}>
           {data.items.slice(0, compact ? 6 : 18).map((w, i) => (
-            <Link className="wall-card" key={w.id} href={`/wallpaper/${w.id}`}>
-              <div className="wall-visual">
-                <img
-                  src={`/api/wallpapers/${w.id}/thumbnail`}
-                  alt={w.title}
-                  loading={i < 3 ? "eager" : "lazy"}
-                  width={1100}
-                  height={i % 3 === 1 ? 1000 : 740}
-                />
-                <span className="wall-quality">
-                  {w.width >= 3840 ? "4K" : "HD"}
-                  <span> {w.width >= 3840 ? "ULTRA HD" : "ORIGINAL"}</span>
-                </span>
-                <span className="wall-open">
-                  <ArrowUpRight size={18} />
-                </span>
-                <span className="wall-download">
-                  <Download size={17} /> View & download
-                </span>
-              </div>
-              <div className="wall-caption">
-                <div>
-                  <h3>{w.title}</h3>
-                  <p>
-                    {short[w.category] || w.category} <span>·</span> {w.width} ×{" "}
-                    {w.height}
-                  </p>
+            <div className="wall-card" key={w.id}>
+              <Link href={`/wallpaper/${w.id}`} className="block">
+                <div className="wall-visual">
+                  <img
+                    src={`/api/wallpapers/${w.id}/thumbnail`}
+                    alt={w.title}
+                    loading={i < 3 ? "eager" : "lazy"}
+                    width={1100}
+                    height={i % 3 === 1 ? 1000 : 740}
+                  />
+                  <span className="wall-quality">
+                    {w.width >= 3840 ? "4K" : "HD"}
+                    <span> {w.width >= 3840 ? "ULTRA HD" : "ORIGINAL"}</span>
+                  </span>
+                  <span className="wall-open">
+                    <ArrowUpRight size={18} />
+                  </span>
+                  <span className="wall-download">
+                    <Download size={17} /> View & download
+                  </span>
                 </div>
-                <span
-                  className="wall-color"
-                  style={{
-                    background:
-                      (
-                        {
-                          blue: "#7098c7",
-                          purple: "#a08dcc",
-                          green: "#6bbaa5",
-                          orange: "#dbb484",
-                          red: "#d58396",
-                        } as Record<string, string>
-                      )[w.color] || "#94a3b8",
-                  }}
-                  aria-label={`${w.color} palette`}
-                />
-              </div>
-            </Link>
+                <div className="wall-caption">
+                  <div>
+                    <h3>{w.title}</h3>
+                    <p>
+                      {short[w.category] || w.category} <span>·</span> {w.width}{" "}
+                      × {w.height}
+                    </p>
+                  </div>
+                  <span
+                    className="wall-color"
+                    style={{
+                      background:
+                        (
+                          {
+                            blue: "#7098c7",
+                            purple: "#a08dcc",
+                            green: "#6bbaa5",
+                            orange: "#dbb484",
+                            red: "#d58396",
+                          } as Record<string, string>
+                        )[w.color] || "#94a3b8",
+                    }}
+                    aria-label={`${w.color} palette`}
+                  />
+                </div>
+              </Link>
+              <button
+                className="wall-phone-preview"
+                onClick={() => setPhonePreview(w)}
+              >
+                <Smartphone size={14} /> Preview on phone
+              </button>
+            </div>
           ))}
         </div>
+      )}
+      {phonePreview && (
+        <PhonePreview
+          wallpaper={phonePreview}
+          onClose={() => setPhonePreview(null)}
+        />
+      )}
+      {data.refreshing && (
+        <p role="status" className="text-xs muted my-5 flex items-center gap-2">
+          <RefreshCw size={14} className="animate-spin" />
+          Adding more photographs to the collection…
+        </p>
       )}
       {!loading && !error && data.pages > 1 && (
         <div className="flex justify-center gap-4 mt-10">

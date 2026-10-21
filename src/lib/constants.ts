@@ -25,4 +25,6 @@ export const resolutions = [
   { label: "Phone · Full HD", width: 1080, height: 1920 },
   { label: "Phone · QHD", width: 1440, height: 2560 },
   { label: "Phone · 4K", width: 2160, height: 3840 },
+  { label: "iPad Pro · Landscape", width: 2732, height: 2048 },
+  { label: "iPad Pro · Portrait", width: 2048, height: 2732 },
 ];

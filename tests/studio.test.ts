@@ -181,3 +181,60 @@ test("every bundled font renders and reports bounds for direct canvas manipulati
     assert.ok((await sharp(output).stats()).channels[0].max > 100, font);
   }
 });
+
+test("bundled collection contains 500 distinct licensed high resolution real photographs", async () => {
+  const { default: catalog } = await import("../src/lib/photo-catalog.json");
+  assert.equal(catalog.length, 500);
+  assert.equal(new Set(catalog.map((p) => p.externalId)).size, 500);
+  assert.ok(new Set(catalog.map((p) => p.category)).size >= 7);
+  for (const photo of catalog) {
+    assert.ok(canAutoPublish(photo), photo.title);
+    assert.ok(photo.width >= 1920 || photo.height >= 1920);
+    assert.ok(Math.min(photo.width, photo.height) >= 1080);
+  }
+});
+test("custom photographic background replaces transparent areas behind the cutout", async () => {
+  const foreground = await sharp({
+    create: { width: 400, height: 400, channels: 4, background: "#00000000" },
+  })
+    .composite([
+      {
+        input: await sharp({
+          create: { width: 100, height: 200, channels: 4, background: "red" },
+        })
+          .png()
+          .toBuffer(),
+        left: 150,
+        top: 100,
+      },
+    ])
+    .png()
+    .toBuffer();
+  const replacement = await sharp({
+    create: { width: 500, height: 300, channels: 3, background: "blue" },
+  })
+    .png()
+    .toBuffer();
+  const result = await render(
+    foreground,
+    {
+      width: 640,
+      height: 360,
+      format: "png",
+      backgroundMode: "art",
+      backgroundPhotoId: "owned-background",
+      padding: 0,
+    },
+    undefined,
+    [replacement],
+  );
+  const pixel = async (left: number, top: number) => [
+    ...(await sharp(result)
+      .extract({ left, top, width: 1, height: 1 })
+      .removeAlpha()
+      .raw()
+      .toBuffer()),
+  ];
+  assert.deepEqual(await pixel(0, 0), [0, 0, 255]);
+  assert.deepEqual(await pixel(320, 180), [255, 0, 0]);
+});

@@ -1,3 +1,8 @@
+import { wallpaperMedia } from "@/lib/wallpaper-media";
+import {
+  photoCollectionStatus,
+  replenishPhotoCollection,
+} from "@/lib/catalog-refresh";
 import { studioPhotos } from "@/lib/studio-photos";
 import { backgroundIds } from "@/lib/studio-presets";
 import type { TextBounds } from "@/lib/images";
@@ -135,47 +140,8 @@ async function handle(
     if (area === "wallpapers") {
       if (!id) {
         await ensureStarterCatalog();
-        const initial = await database
-          .collection("settings")
-          .updateOne(
-            { _id: "initial-photo-discovery" as any },
-            { $setOnInsert: { status: "running", startedAt: new Date() } },
-            { upsert: true },
-          );
-        if (initial.upsertedCount)
-          after(async () => {
-            try {
-              await db.source.upsert({
-                where: { id: "commons" },
-                create: {
-                  id: "commons",
-                  enabled: true,
-                  schedule: "weekly",
-                  intervalHours: 168,
-                  nextRunAt: nextWeeklyRun(),
-                  query: "mountain landscape",
-                },
-                update: {},
-              });
-              await discover("commons", "mountain landscape");
-              await database
-                .collection("settings")
-                .updateOne(
-                  { _id: "initial-photo-discovery" as any },
-                  { $set: { status: "completed" } },
-                );
-            } catch (e) {
-              await database.collection("settings").updateOne(
-                { _id: "initial-photo-discovery" as any },
-                {
-                  $set: {
-                    status: "failed",
-                    error: e instanceof Error ? e.message : "Discovery failed",
-                  },
-                },
-              );
-            }
-          });
+        const collection = await photoCollectionStatus();
+        if (collection.refreshing) after(replenishPhotoCollection);
         const q = (url.searchParams.get("q") || "").slice(0, 100),
           category = url.searchParams.get("category"),
           color = url.searchParams.get("color"),
@@ -223,6 +189,7 @@ async function handle(
           .toArray();
         const total = result?.total?.[0]?.count || 0;
         return json({
+          refreshing: collection.refreshing,
           items: result?.items || [],
           total,
           page,
@@ -232,7 +199,7 @@ async function handle(
       const w = await db.wallpaper.findUnique({ where: { id } });
       if (!w || (!w.published && (await session())?.role !== "admin"))
         throw new HttpError(404, "Wallpaper not found");
-      if (action === "thumbnail") return image(await get(w.thumbKey));
+      if (action === "thumbnail") return image(await wallpaperMedia(w, true));
       if (action === "attribution")
         return new NextResponse(attribution(w as any), {
           headers: {
@@ -260,7 +227,7 @@ async function handle(
         let bytes: Buffer;
         if (variant) bytes = await get(variant.key);
         else {
-          bytes = await render(await get(w.originalKey), options);
+          bytes = await render(await wallpaperMedia(w), options);
           const key = `variants/${id}/${options.width}x${options.height}.${options.format}`;
           await put(
             key,
@@ -342,7 +309,13 @@ async function handle(
       let scale = Math.min(1, 800 / Math.max(options.width, options.height));
       scale = Math.max(scale, 320 / Math.min(options.width, options.height));
       let textBounds: TextBounds | null = null;
-      const photos = await studioPhotos(options.photoIds, user!.id);
+      const photos = await studioPhotos(
+        [
+          ...options.photoIds,
+          ...(options.backgroundPhotoId ? [options.backgroundPhotoId] : []),
+        ],
+        user!.id,
+      );
       const bytes = await render(
         await get(upload.key),
         {
@@ -468,7 +441,13 @@ async function handle(
         const options = optionsSchema.parse(input.options);
         if (options.width * options.height > cap.outputMegapixels * 1000000)
           throw new HttpError(400, "Output exceeds administrator pixel limit");
-        await studioPhotos(options.photoIds, u!.id);
+        await studioPhotos(
+          [
+            ...options.photoIds,
+            ...(options.backgroundPhotoId ? [options.backgroundPhotoId] : []),
+          ],
+          u!.id,
+        );
         const job = await db.job.create({
           data: {
             uploadId: upload.id,
@@ -569,7 +548,7 @@ async function handle(
         });
         await rateLimit("admin-enhance", 20);
         const key = `private/${u.id}/${randomUUID()}.webp`;
-        await put(key, await get(w.originalKey));
+        await put(key, await wallpaperMedia(w));
         const upload = await db.upload.create({
           data: {
             ownerId: u.id,
@@ -649,7 +628,7 @@ async function handle(
         const w = await db.wallpaper.findUniqueOrThrow({
           where: { id: wallpaperId },
         });
-        const bytes = await get(w.originalKey);
+        const bytes = await wallpaperMedia(w);
         for (const [width, height] of [
           [1920, 1080],
           [3840, 2160],

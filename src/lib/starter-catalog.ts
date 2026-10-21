@@ -1,3 +1,6 @@
+import catalog from "./photo-catalog.json";
+import { createHash } from "node:crypto";
+import { licenseUrl } from "./licenses";
 import sharp from "sharp";
 import { db, database, ensureIndexes, mongo } from "./db";
 import { validateImage } from "./images";
@@ -81,14 +84,65 @@ export function ensureStarterCatalog() {
       if (
         await database
           .collection("settings")
-          .findOne({ _id: `starter-catalog-v1:${storageProvider()}` as any })
+          .findOne({ _id: `starter-catalog-v3:${storageProvider()}` as any })
       )
         return;
       await seedOriginalArt();
+      await database.collection("wallpapers").bulkWrite(
+        catalog.map((photo: any) => {
+          const hash = createHash("sha256")
+            .update(photo.imageUrl)
+            .digest("hex");
+          return {
+            updateOne: {
+              filter: { sourceUrl: photo.sourceUrl },
+              update: {
+                $setOnInsert: {
+                  id: photo.externalId.replace(":", "-"),
+                  createdAt: new Date(
+                    Date.now() - (parseInt(hash.slice(0, 6), 16) % 60000),
+                  ),
+                  updatedAt: new Date(),
+                  title: photo.title.replace(/\.[a-z0-9]{2,5}$/i, ""),
+                  category: photo.category,
+                  tags: [
+                    "photography",
+                    "wallpaper",
+                    ...photo.title
+                      .toLowerCase()
+                      .split(/[^a-z0-9]+/)
+                      .filter(Boolean)
+                      .slice(0, 15),
+                  ],
+                  color: "green",
+                  width: photo.width,
+                  height: photo.height,
+                  hash,
+                  originalKey: `originals/catalog-${hash}.webp`,
+                  thumbKey: `thumbs/catalog-${hash}.webp`,
+                  remoteUrl: photo.imageUrl,
+                  remoteThumbnailUrl: photo.thumbnailUrl,
+                  creator: photo.creator,
+                  license: photo.license,
+                  licenseUrl: licenseUrl(photo.license),
+                  sourceUrl: photo.sourceUrl,
+                  source: "commons",
+                  aiStatus: "original",
+                  published: true,
+                  featured: false,
+                  downloads: 0,
+                },
+              },
+              upsert: true,
+            },
+          };
+        }),
+        { ordered: false },
+      );
       await database
         .collection("settings")
         .updateOne(
-          { _id: `starter-catalog-v1:${storageProvider()}` as any },
+          { _id: `starter-catalog-v3:${storageProvider()}` as any },
           { $set: { ready: true, createdAt: new Date() } },
           { upsert: true },
         );

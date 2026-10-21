@@ -51,7 +51,13 @@ export async function processNextJob(jobId?: string) {
         bytes,
         options,
         undefined,
-        await studioPhotos(options.photoIds, upload.ownerId),
+        await studioPhotos(
+          [
+            ...options.photoIds,
+            ...(options.backgroundPhotoId ? [options.backgroundPhotoId] : []),
+          ],
+          upload.ownerId,
+        ),
       );
       const key = `private/${upload.ownerId}/${job.id}.${options.format}`;
       await put(
