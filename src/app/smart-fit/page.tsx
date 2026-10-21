@@ -1,5 +1,5 @@
-import { Studio } from "@/components/studio";
+import { QuickCreator } from "@/components/quick-creator";
 export const metadata = { title: "Smart Wallpaper Fit" };
 export default function Page() {
-  return <Studio mode="smart-fit" />;
+  return <QuickCreator mode="smart-fit" />;
 }

@@ -8,7 +8,13 @@ export function PhonePreview({
   onDeviceChange,
   initialDevice,
 }: {
-  wallpaper: { id: string; title: string; imageSrc?: string };
+  wallpaper: {
+    id: string;
+    title: string;
+    imageSrc?: string;
+    width: number;
+    height: number;
+  };
   onClose: () => void;
   initialDevice?: string;
   onCropChange?: (x: number, y: number) => void;

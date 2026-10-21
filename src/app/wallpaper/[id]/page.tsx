@@ -136,10 +136,22 @@ export default async function Detail({
         </div>
         <div>
           <div className="panel mb-5">
-            <DevicePreview wallpaper={{ id, title: w.title }} />
+            <DevicePreview
+              wallpaper={{
+                id,
+                title: w.title,
+                width: w.width,
+                height: w.height,
+              }}
+            />
           </div>
           <DownloadPanel id={id} />
-          <WallpaperActions id={id} title={w.title} />
+          <WallpaperActions
+            id={id}
+            title={w.title}
+            width={w.width}
+            height={w.height}
+          />
           <p className="text-xs muted leading-6 mt-5 px-2">
             Respect the creator. Keep attribution with your download and follow
             the linked license when sharing or adapting this image.

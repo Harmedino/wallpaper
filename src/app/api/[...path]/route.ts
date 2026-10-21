@@ -12,7 +12,7 @@ import {
   replenishPhotoCollection,
 } from "@/lib/catalog-refresh";
 import { studioPhotos } from "@/lib/studio-photos";
-import { backgroundIds } from "@/lib/studio-presets";
+import { textFonts, backgroundIds } from "@/lib/studio-presets";
 import type { TextBounds } from "@/lib/images";
 import { ensureStarterCatalog } from "@/lib/starter-catalog";
 import { createBackground } from "@/lib/backgrounds";
@@ -39,6 +39,7 @@ import { discover } from "@/lib/sources";
 import { remote } from "@/lib/network";
 import { z } from "zod";
 import sharp from "sharp";
+import { quickTemplateSvg } from "@/lib/quick-template";
 import { randomUUID } from "node:crypto";
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -352,6 +353,81 @@ async function handle(
       }
       const { originalKey, thumbKey, hash, ...publicWallpaper } = w;
       return json(publicWallpaper);
+    }
+    if (
+      area === "studio" &&
+      ["template", "template-preview"].includes(id) &&
+      req.method === "POST"
+    ) {
+      const user = await session(true);
+      await rateLimit(
+        `${id}:${user!.id}`,
+        id === "template-preview" ? 60 : 20,
+        60,
+      );
+      const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+      const input = z
+        .object({
+          font: z
+            .enum(Object.keys(textFonts) as [string, ...string[]])
+            .default("sans"),
+          fontStyle: z
+            .enum(["regular", "bold", "italic", "bold-italic"])
+            .default("regular"),
+          align: z.enum(["left", "center", "right"]).default("center"),
+          textBlur: z.number().min(0).max(8).default(0),
+          textScale: z.number().min(0.6).max(1.5).default(1),
+          spacing: z.number().min(0).max(0.03).default(0.008),
+          opacity: z.number().min(0.2).max(1).default(1),
+          style: z.enum(["stripes", "rays", "minimal"]),
+          primary: color,
+          secondary: color,
+          accent: color,
+          name: z.string().max(24),
+          badge: z.string().max(3),
+          number: z.string().max(3),
+          width: z.number().int().min(320).max(3840),
+          height: z.number().int().min(320).max(4680),
+        })
+        .parse(await req.json());
+      if (input.width * input.height > 16_000_000)
+        throw new HttpError(400, "Output exceeds processing limit");
+      if (id === "template-preview") {
+        const scale = 800 / Math.max(input.width, input.height);
+        const bytes = await sharp(
+          Buffer.from(
+            quickTemplateSvg({
+              ...input,
+              width: Math.round(input.width * scale),
+              height: Math.round(input.height * scale),
+            }),
+          ),
+        )
+          .webp()
+          .toBuffer();
+        return image(bytes, "image/webp", undefined, {
+          "Cache-Control": "private, no-store",
+        });
+      }
+      const clean = await validateImage(
+        await sharp(Buffer.from(quickTemplateSvg(input)))
+          .png()
+          .toBuffer(),
+      );
+      const key = `private/${user!.id}/${randomUUID()}.webp`;
+      await put(key, clean.bytes);
+      const cap = await limits();
+      const row = await db.upload.create({
+        data: {
+          ownerId: user!.id,
+          key,
+          width: clean.width,
+          height: clean.height,
+          hash: clean.hash,
+          expiresAt: new Date(Date.now() + cap.retentionHours * 3600000),
+        },
+      });
+      return json({ id: row.id, width: row.width, height: row.height }, 201);
     }
     if (area === "studio" && id === "background" && req.method === "POST") {
       const user = await session(true);

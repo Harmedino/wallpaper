@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { WallpaperThumbnail } from "./wallpaper-thumbnail";
+import { compatibleDevices } from "@/lib/device-fit";
 import { PhonePreview } from "./phone-preview";
 import {
   ArrowUpRight,
@@ -479,8 +480,17 @@ export function Gallery({
                     height={i % 3 === 1 ? 1000 : 740}
                   />
                   <span className="wall-quality">
-                    {Math.max(w.width,w.height)>=3840 && Math.min(w.width,w.height)>=2160 ? "4K" : "HD"}
-                    <span> {Math.max(w.width,w.height)>=3840 && Math.min(w.width,w.height)>=2160 ? "ULTRA HD" : "ORIGINAL"}</span>
+                    {Math.max(w.width, w.height) >= 3840 &&
+                    Math.min(w.width, w.height) >= 2160
+                      ? "4K"
+                      : "HD"}
+                    <span>
+                      {" "}
+                      {Math.max(w.width, w.height) >= 3840 &&
+                      Math.min(w.width, w.height) >= 2160
+                        ? "ULTRA HD"
+                        : "ORIGINAL"}
+                    </span>
                   </span>
                   <span className="wall-open">
                     <ArrowUpRight size={18} />
@@ -515,12 +525,19 @@ export function Gallery({
                   />
                 </div>
               </Link>
-              <button
-                className="wall-phone-preview"
-                onClick={() => setPhonePreview(w)}
-              >
-                <Smartphone size={14} /> Preview on phone
-              </button>
+              {compatibleDevices(w).length > 0 && (
+                <button
+                  className="wall-phone-preview"
+                  onClick={() => setPhonePreview(w)}
+                >
+                  <Smartphone size={14} /> Preview on{" "}
+                  {compatibleDevices(w).some((d) => d.group === "phone")
+                    ? "phone"
+                    : compatibleDevices(w)[0]?.group === "ipad"
+                      ? "iPad"
+                      : "desktop"}
+                </button>
+              )}
             </div>
           ))}
         </div>

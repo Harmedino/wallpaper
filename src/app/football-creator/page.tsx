@@ -1,5 +1,5 @@
-import { Studio } from "@/components/studio";
+import { QuickCreator } from "@/components/quick-creator";
 export const metadata = { title: "Football Wallpaper Creator" };
 export default function Page() {
-  return <Studio mode="football" />;
+  return <QuickCreator mode="football" />;
 }

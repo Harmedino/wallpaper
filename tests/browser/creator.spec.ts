@@ -5,7 +5,7 @@ test("Football presets produce editable layers and a real preview", async ({
 }) => {
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith("/api/capabilities")),
-    page.goto("/football-creator"),
+    page.goto("/football-creator?advanced=1"),
   ]);
   const bytes = await sharp({
     create: { width: 800, height: 1200, channels: 3, background: "#264455" },
@@ -33,7 +33,7 @@ test("Football presets produce editable layers and a real preview", async ({
 test("Smart Fit has genuine face detection and honest optional AI controls", async ({
   page,
 }) => {
-  await page.goto("/smart-fit");
+  await page.goto("/smart-fit?advanced=1");
   await expect(
     page.getByRole("heading", { name: /Smart Wallpaper Fit/ }),
   ).toBeVisible();
@@ -48,7 +48,7 @@ test("Face model runs locally and saved drafts restore layered edits", async ({
   test.setTimeout(60000);
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith("/api/capabilities")),
-    page.goto("/smart-fit"),
+    page.goto("/smart-fit?advanced=1"),
   ]);
   const bytes = await sharp({
     create: { width: 800, height: 1200, channels: 3, background: "#264455" },
@@ -86,4 +86,64 @@ test("Face model runs locally and saved drafts restore layered edits", async ({
   await expect(page.getByLabel("Wallpaper text", { exact: true })).toHaveValue(
     "DRAFT FIRST",
   );
+});
+
+test("simple creator customizes a striped badge and downloads the actual wallpaper", async ({
+  page,
+}) => {
+  await page.goto("/football-creator");
+  await expect(
+    page.getByRole("heading", { name: "Your club. Your screen." }),
+  ).toBeVisible();
+  await page.getByLabel("Club or custom name").fill("NORTH FC");
+  await page.getByLabel("Badge initials").fill("NFC");
+  await page.locator(".quick-style summary").click();
+  await page.getByLabel("Font type", { exact: true }).selectOption("italic");
+  await page.getByRole("button", { name: "Align center", exact: true }).click();
+  await page.getByRole("button", { name: "Red & black", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Create wallpaper", exact: true })
+    .click();
+  const link = page.getByRole("link", {
+    name: "Download wallpaper ↓",
+    exact: true,
+  });
+  await expect(link).toBeVisible({ timeout: 30000 });
+  const promise = page.waitForEvent("download");
+  await link.click();
+  const dl = await promise;
+  const metadata = await sharp((await dl.path())!).metadata();
+  expect(metadata.width).toBe(1440);
+  expect(metadata.height).toBe(3120);
+});
+test("simple photo creator previews cinematic effects and exports full portrait 4K", async ({
+  page,
+}) => {
+  await page.goto("/smart-fit");
+  await page.getByLabel("Choose your photo").setInputFiles({
+    name: "player.png",
+    mimeType: "image/png",
+    buffer: await sharp({
+      create: { width: 800, height: 1200, channels: 3, background: "#16435a" },
+    })
+      .png()
+      .toBuffer(),
+  });
+  await page.getByRole("button", { name: "Fire & ice", exact: true }).click();
+  await page.getByLabel("Your screen", { exact: true }).selectOption("4k");
+  await expect(page.getByAltText("Your wallpaper design")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Create wallpaper", exact: true })
+    .click();
+  const link = page.getByRole("link", {
+    name: "Download wallpaper ↓",
+    exact: true,
+  });
+  await expect(link).toBeVisible({ timeout: 30000 });
+  const promise = page.waitForEvent("download");
+  await link.click();
+  const dl = await promise;
+  const m = await sharp((await dl.path())!).metadata();
+  expect(m.width).toBe(2160);
+  expect(m.height).toBe(3840);
 });

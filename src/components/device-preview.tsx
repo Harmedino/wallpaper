@@ -6,6 +6,10 @@ import {
   BatteryFull,
   Signal,
   Camera,
+  Phone,
+  CloudSun,
+  LockKeyhole,
+  Pause,
   Images,
   Mail,
   Music,
@@ -19,74 +23,15 @@ import {
   Search,
   Monitor,
 } from "lucide-react";
-export const devices = [
-  {
-    id: "iphone",
-    group: "phone",
-    name: "iPhone 16 Pro",
-    width: 1206,
-    height: 2622,
-    os: "ios",
-  },
-  {
-    id: "iphone-max",
-    group: "phone",
-    name: "iPhone 16 Pro Max",
-    width: 1320,
-    height: 2868,
-    os: "ios",
-  },
-  {
-    id: "android",
-    group: "phone",
-    name: "Galaxy S25 Ultra",
-    width: 1440,
-    height: 3120,
-    os: "android",
-  },
-  {
-    id: "pixel",
-    group: "phone",
-    name: "Pixel 9 Pro",
-    width: 1280,
-    height: 2856,
-    os: "android",
-  },
-  {
-    id: "windows",
-    group: "desktop",
-    name: "Windows · 4K monitor",
-    width: 3840,
-    height: 2160,
-    os: "windows",
-  },
-  {
-    id: "mac",
-    group: "desktop",
-    name: "MacBook Pro 14",
-    width: 3024,
-    height: 1964,
-    os: "mac",
-  },
-  {
-    id: "ultrawide",
-    group: "desktop",
-    name: "Windows · Ultrawide",
-    width: 3440,
-    height: 1440,
-    os: "windows",
-  },
-  {
-    id: "ipad",
-    group: "ipad",
-    name: "iPad Pro 12.9",
-    width: 2732,
-    height: 2048,
-    os: "ios",
-  },
-];
+import { compatibleDevices } from "@/lib/device-fit";
 type Props = {
-  wallpaper: { id: string; title: string; imageSrc?: string };
+  wallpaper: {
+    id: string;
+    title: string;
+    imageSrc?: string;
+    width: number;
+    height: number;
+  };
   onCropChange?: (x: number, y: number) => void;
   onDeviceChange?: (width: number, height: number) => void;
   showDownload?: boolean;
@@ -94,26 +39,28 @@ type Props = {
 };
 export function DevicePreview({
   wallpaper,
-  onCropChange,
   onDeviceChange,
   showDownload = true,
-  initialDevice = "iphone",
+  initialDevice = "android",
 }: Props) {
   const [deviceId, setDeviceId] = useState(initialDevice),
     [mode, setMode] = useState("lock"),
     [loading, setLoading] = useState(true),
-    [x, setX] = useState(0.5),
-    [y, setY] = useState(0.5),
     [widgets, setWidgets] = useState(true),
     [fullscreen, setFullscreen] = useState(false);
   const [clock, setClock] = useState("9:41"),
     [date, setDate] = useState("Wednesday, October 21");
   const frame = useRef<HTMLDivElement>(null);
-  const d = devices.find((v) => v.id === deviceId)!;
+  const fitting = compatibleDevices(wallpaper);
+  const d = fitting.find((v) => v.id === deviceId) || fitting[0];
   useEffect(() => {
     const now = new Date();
     setClock(
-      now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
     );
     setDate(
       now.toLocaleDateString([], {
@@ -124,49 +71,61 @@ export function DevicePreview({
     );
   }, []);
   const apps = [
-    ["Calendar", Calendar, "#e7e5e0"],
-    ["Camera", Camera, "#606b79"],
-    ["Photos", Images, "#b8b873"],
-    ["Messages", MessageCircle, "#57a978"],
-    ["Mail", Mail, "#559fc7"],
-    ["Music", Music, "#ce6c8c"],
+    ["Calendar", Calendar, "#49ae75"],
+    ["Camera", Camera, "#f14c67"],
+    ["Gallery", Images, "#fa6686"],
+    ["Messages", MessageCircle, "#348bf3"],
+    ["Email", Mail, "#ea594a"],
+    ["Music", Music, "#8c56de"],
     ["Maps", Map, "#7cba9b"],
     ["Settings", Settings, "#798897"],
   ] as const;
   function choose(id: string) {
     setDeviceId(id);
-    const next = devices.find((v) => v.id === id)!;
+    const next = fitting.find((v) => v.id === id)!;
     onDeviceChange?.(next.width, next.height);
   }
-  function crop(nextX: number, nextY: number) {
-    setX(nextX);
-    setY(nextY);
-    onCropChange?.(nextX, nextY);
-  }
+  if (!d)
+    return (
+      <div className="notice mt-4">
+        <p>
+          No device preview matches this image’s aspect ratio without cropping.
+        </p>
+        <Link className="chip inline-block mt-3" href="/smart-fit">
+          Fit it to your screen →
+        </Link>
+      </div>
+    );
+  const screenMode = d.group === "desktop" && mode === "lock" ? "home" : mode;
   return (
     <div
       className={"device-preview " + (fullscreen ? "device-fullscreen" : "")}
     >
       <h2 className="text-lg">Preview on your screen</h2>
+      {d.os === "android" && (
+        <p className="one-ui-label">SAMSUNG GALAXY · ONE UI 7 PREVIEW</p>
+      )}
       <div className="flex flex-wrap gap-2 justify-center my-4">
         {[
           ["phone", "Phone"],
           ["desktop", "Desktop"],
           ["ipad", "iPad"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            className={"chip " + (d.group === id ? "active" : "")}
-            onClick={() => choose(devices.find((v) => v.group === id)!.id)}
-          >
-            {label}
-          </button>
-        ))}
+        ]
+          .filter(([id]) => fitting.some((v) => v.group === id))
+          .map(([id, label]) => (
+            <button
+              key={id}
+              className={"chip " + (d.group === id ? "active" : "")}
+              onClick={() => choose(fitting.find((v) => v.group === id)!.id)}
+            >
+              {label}
+            </button>
+          ))}
       </div>
       <label className="field mb-3">
         Device preset
-        <select value={deviceId} onChange={(e) => choose(e.target.value)}>
-          {devices
+        <select value={d.id} onChange={(e) => choose(e.target.value)}>
+          {fitting
             .filter((v) => v.group === d.group)
             .map((v) => (
               <option key={v.id} value={v.id}>
@@ -180,19 +139,27 @@ export function DevicePreview({
           ["lock", "Lock screen"],
           ["home", d.group === "desktop" ? "Desktop view" : "Home screen"],
           ["wallpaper", "Wallpaper only"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            className={"chip " + (mode === id ? "active" : "")}
-            onClick={() => setMode(id)}
-          >
-            {label}
-          </button>
-        ))}
+        ]
+          .filter(([id]) => d.group !== "desktop" || id !== "lock")
+          .map(([id, label]) => (
+            <button
+              key={id}
+              className={"chip " + (screenMode === id ? "active" : "")}
+              onClick={() => setMode(id)}
+            >
+              {label}
+            </button>
+          ))}
       </div>
       <div
         ref={frame}
-        className={"phone-mockup device-" + d.group + " os-" + d.os}
+        className={
+          "phone-mockup device-" +
+          d.group +
+          " os-" +
+          d.os +
+          (d.os === "android" ? " one-ui-7" : "")
+        }
         style={{ aspectRatio: d.width / d.height }}
       >
         <img
@@ -203,7 +170,8 @@ export function DevicePreview({
           onError={() => setLoading(false)}
           alt={`${wallpaper.title} ${d.group} preview`}
           style={{
-            objectPosition: onCropChange ? "center" : `${x * 100}% ${y * 100}%`,
+            objectFit: "contain",
+            objectPosition: "center",
           }}
         />
         {loading && (
@@ -212,7 +180,7 @@ export function DevicePreview({
             Loading wallpaper…
           </div>
         )}
-        {mode !== "wallpaper" && (
+        {screenMode !== "wallpaper" && (
           <>
             {d.group !== "desktop" && (
               <>
@@ -227,7 +195,7 @@ export function DevicePreview({
                 </div>
               </>
             )}
-            {d.group === "desktop" && mode === "home" ? (
+            {d.group === "desktop" && screenMode === "home" ? (
               <div className="desktop-interface">
                 <div className="desktop-menu">
                   {d.os === "mac"
@@ -258,13 +226,16 @@ export function DevicePreview({
                   <span>{clock}</span>
                 </div>
               </div>
-            ) : mode === "lock" ? (
+            ) : screenMode === "lock" ? (
               <div className="phone-lock">
-                <p>{date}</p>
+                {d.os === "android" && (
+                  <LockKeyhole size={16} className="one-ui-lock-icon" />
+                )}
                 <strong>{clock}</strong>
+                <p>{date}</p>
                 {widgets && (
                   <span className="lock-widgets">
-                    ☀ 24° &nbsp; ◉ Activity &nbsp; ♡ Focus
+                    <CloudSun size={18} /> 24° <span>Sunny</span>
                   </span>
                 )}
               </div>
@@ -273,7 +244,10 @@ export function DevicePreview({
                 <div className="phone-widget">
                   {date}
                   <br />
-                  <strong>Make today yours.</strong>
+                  <strong>
+                    <CloudSun size={28} /> 24°
+                  </strong>
+                  <span>Sunny · Tap for weather</span>
                 </div>
                 <div className="phone-apps">
                   {apps.map(([name, Icon, color]) => (
@@ -286,41 +260,47 @@ export function DevicePreview({
                   ))}
                 </div>
                 <div className="phone-dock">
-                  <MessageCircle />
-                  <Globe />
-                  <Mail />
-                  <Music />
+                  <span className="one-ui-dock-phone">
+                    <Phone />
+                  </span>
+                  <span className="one-ui-dock-message">
+                    <MessageCircle />
+                  </span>
+                  <span className="one-ui-dock-browser">
+                    <Globe />
+                  </span>
+                  <span className="one-ui-dock-camera">
+                    <Camera />
+                  </span>
                 </div>
               </div>
+            )}
+            {d.os === "android" && screenMode === "lock" && (
+              <>
+                <div className="one-ui-shortcuts">
+                  <span>
+                    <Phone size={18} />
+                  </span>
+                  <span>
+                    <Camera size={18} />
+                  </span>
+                </div>
+                <div className="one-ui-now-bar">
+                  <Music size={14} />
+                  <span>Now playing</span>
+                  <span>
+                    <Pause size={12} />
+                  </span>
+                </div>
+              </>
             )}
             {d.group !== "desktop" && <div className="phone-home-bar" />}
           </>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-3 mt-4">
-        <label className="field">
-          Preview horizontal crop
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step=".01"
-            value={x}
-            onChange={(e) => crop(+e.target.value, y)}
-          />
-        </label>
-        <label className="field">
-          Preview vertical crop
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step=".01"
-            value={y}
-            onChange={(e) => crop(x, +e.target.value)}
-          />
-        </label>
-      </div>
+      <p className="text-xs text-teal-200 mt-4">
+        Full image visible · matching aspect ratio · no preview crop
+      </p>
       <div className="flex flex-wrap justify-center gap-3 mt-3">
         <label className="text-xs flex gap-2">
           <input
@@ -341,7 +321,7 @@ export function DevicePreview({
       {showDownload && (
         <Link
           className="chip active inline-block"
-          href={`/wallpaper/${wallpaper.id}?device=${d.group}&width=${d.width}&height=${d.height}&x=${x}&y=${y}&orientation=${d.group === "phone" ? "portrait" : "landscape"}`}
+          href={`/wallpaper/${wallpaper.id}?device=${d.group}&width=${d.width}&height=${d.height}&x=0.5&y=0.5&orientation=${d.group === "phone" ? "portrait" : "landscape"}`}
         >
           Choose resolution & download →
         </Link>

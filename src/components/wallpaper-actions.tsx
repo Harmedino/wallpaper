@@ -1,11 +1,23 @@
 "use client";
 import { useState, useEffect } from "react";
+import { compatibleDevices } from "@/lib/device-fit";
 import { PhonePreview } from "./phone-preview";
-export function WallpaperActions({ id, title }: { id: string; title: string }) {
+export function WallpaperActions({
+  id,
+  title,
+  width,
+  height,
+}: {
+  id: string;
+  title: string;
+  width: number;
+  height: number;
+}) {
+  const fitting = compatibleDevices({ width, height });
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [preview, setPreview] = useState(false),
-    [previewDevice, setPreviewDevice] = useState("iphone"),
+    [previewDevice, setPreviewDevice] = useState("android"),
     [favorite, setFavorite] = useState(false),
     [message, setMessage] = useState("");
   useEffect(() => {
@@ -61,24 +73,28 @@ export function WallpaperActions({ id, title }: { id: string; title: string }) {
         >
           Enhance to 4K
         </button>
-        <button
-          className="chip"
-          onClick={() => {
-            setPreviewDevice("iphone");
-            setPreview(true);
-          }}
-        >
-          Preview on My Phone
-        </button>
-        <button
-          className="chip"
-          onClick={() => {
-            setPreviewDevice("windows");
-            setPreview(true);
-          }}
-        >
-          Preview on Desktop
-        </button>
+        {fitting.some((d) => d.group === "phone") && (
+          <button
+            className="chip"
+            onClick={() => {
+              setPreviewDevice("android");
+              setPreview(true);
+            }}
+          >
+            Preview on My Phone
+          </button>
+        )}
+        {fitting.some((d) => d.group === "desktop") && (
+          <button
+            className="chip"
+            onClick={() => {
+              setPreviewDevice(fitting.find((d) => d.group === "desktop")!.id);
+              setPreview(true);
+            }}
+          >
+            Preview on Desktop
+          </button>
+        )}
         <button
           className={"chip " + (favorite ? "active" : "")}
           onClick={() => {
@@ -127,7 +143,7 @@ export function WallpaperActions({ id, title }: { id: string; title: string }) {
       )}
       {preview && (
         <PhonePreview
-          wallpaper={{ id, title }}
+          wallpaper={{ id, title, width, height }}
           initialDevice={previewDevice}
           onClose={() => setPreview(false)}
         />

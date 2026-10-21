@@ -35,7 +35,7 @@ test("Studio uploads, creates and downloads a real private result", async ({
 }) => {
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith("/api/capabilities")),
-    page.goto("/studio"),
+    page.goto("/studio?advanced=1"),
   ]);
   const bytes = await sharp({
     create: { width: 800, height: 600, channels: 3, background: "#345678" },
@@ -111,7 +111,7 @@ test("Studio templates, text and framing export a real edited wallpaper without 
 }) => {
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith("/api/capabilities")),
-    page.goto("/studio"),
+    page.goto("/studio?advanced=1"),
   ]);
   await expect(page.getByRole("checkbox", { name: /I own/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Sunset", exact: true }).click();
@@ -145,7 +145,7 @@ test("mobile editor preserves photos, pins preview and supports text dragging an
   );
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith("/api/capabilities")),
-    page.goto("/studio"),
+    page.goto("/studio?advanced=1"),
   ]);
   await ready;
   const red = await sharp({
@@ -248,34 +248,71 @@ test("mobile editor preserves photos, pins preview and supports text dragging an
   expect(metadata.height).toBe(2160);
 });
 
-test("Explore has 500 photographs and phone, desktop and iPad previews", async ({
+test("Explore only offers matching device previews without hidden details", async ({
   page,
 }) => {
-  await page.goto("/explore");
-  await expect(page.getByText(/5\d\d wallpapers to make your own/)).toBeVisible(
-    { timeout: 20000 },
-  );
-  await page
-    .getByRole("button", { name: "Preview on phone", exact: true })
-    .first()
-    .click();
-  const dialog = page.getByRole("dialog", {
-    name: "Preview wallpaper on your devices",
+  await page.route("**/api/wallpapers?*", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.items = [
+      {
+        ...data.items[0],
+        id: "fit-desktop",
+        title: "Desktop fit",
+        width: 3840,
+        height: 2160,
+      },
+      {
+        ...data.items[0],
+        id: "fit-samsung",
+        title: "Samsung fit",
+        width: 1440,
+        height: 3120,
+      },
+      {
+        ...data.items[0],
+        id: "no-fit",
+        title: "Square original",
+        width: 2000,
+        height: 2000,
+      },
+    ];
+    await route.fulfill({ response, json: data });
   });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.locator(".device-phone")).toBeVisible();
-  await dialog.getByRole("button", { name: "Desktop", exact: true }).click();
+  await page.goto("/explore");
+  const desktop = page.locator(".wall-card").filter({ hasText: "Desktop fit" });
+  const samsung = page.locator(".wall-card").filter({ hasText: "Samsung fit" });
+  await expect(
+    page
+      .locator(".wall-card")
+      .filter({ hasText: "Square original" })
+      .getByRole("button", { name: /Preview on/ }),
+  ).toHaveCount(0);
+  await desktop
+    .getByRole("button", { name: "Preview on desktop", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
   await expect(dialog.locator(".device-desktop")).toBeVisible();
-  await dialog.getByRole("button", { name: "iPad", exact: true }).click();
-  await expect(dialog.locator(".device-ipad")).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Phone", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    dialog.getByRole("button", { name: "iPad", exact: true }),
+  ).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Close phone preview" }).click();
+  await samsung
+    .getByRole("button", { name: "Preview on phone", exact: true })
+    .click();
+  await expect(dialog.locator(".one-ui-7")).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "Desktop", exact: true }),
+  ).toHaveCount(0);
+  await expect(dialog.getByText(/Full image visible/)).toBeVisible();
   await dialog
     .getByRole("button", { name: "Home screen", exact: true })
     .click();
-  await expect(dialog.locator(".phone-home")).toBeVisible();
-  await dialog
-    .getByRole("button", { name: "Close phone preview", exact: true })
-    .click();
-  await expect(dialog).not.toBeVisible();
+  await expect(dialog.getByText("Gallery", { exact: true })).toBeVisible();
+  await expect(dialog.locator(".one-ui-dock-phone")).toBeVisible();
 });
 
 test("real on-device cutout removes background and photographic replacements export", async ({
@@ -284,7 +321,7 @@ test("real on-device cutout removes background and photographic replacements exp
   test.setTimeout(90000);
   await Promise.all([
     page.waitForResponse((r) => r.url().endsWith("/api/capabilities")),
-    page.goto("/studio"),
+    page.goto("/studio?advanced=1"),
   ]);
   await page
     .getByLabel("Upload image", { exact: true })

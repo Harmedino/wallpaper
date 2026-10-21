@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useEditorHistory } from "./editor-history";
 import { ShapeHandles, type EditorShape } from "./shape-handles";
 import { resolutionAssessment } from "@/lib/quality-client";
+import { compatibleDevices } from "@/lib/device-fit";
 import { PhonePreview } from "./phone-preview";
 import { FontPicker } from "./font-picker";
 import { looks, backgrounds } from "@/lib/studio-presets";
@@ -825,6 +826,8 @@ export function Studio({
           wallpaper={{
             id: upload.id,
             title: "Your edited wallpaper",
+            width: target.width,
+            height: target.height,
             imageSrc: preview || `/api/uploads/${upload.id}/image`,
           }}
           onClose={() => setDevicePreview(false)}
@@ -896,6 +899,7 @@ export function Studio({
                 className="chip"
                 disabled={!upload}
                 onClick={() => setDevicePreview(true)}
+                hidden={!compatibleDevices(target).length}
               >
                 Preview on device
               </button>

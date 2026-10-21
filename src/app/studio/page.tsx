@@ -1,5 +1,5 @@
-import { Studio } from "@/components/studio";
+import { QuickCreator } from "@/components/quick-creator";
 export const metadata = { title: "AI Wallpaper Studio" };
 export default function Page() {
-  return <Studio />;
+  return <QuickCreator />;
 }
