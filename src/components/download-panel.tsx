@@ -6,6 +6,16 @@ import { Button } from "./ui/button";
 export function DownloadPanel({ id }: { id: string }) {
   const [index, setIndex] = useState(2);
   useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const exact = resolutions.findIndex(
+      (r) =>
+        r.width === Number(q.get("width")) &&
+        r.height === Number(q.get("height")),
+    );
+    if (exact >= 0) {
+      setIndex(exact);
+      return;
+    }
     if (new URLSearchParams(window.location.search).get("device") === "ipad") {
       setIndex(8);
       return;
@@ -24,7 +34,7 @@ export function DownloadPanel({ id }: { id: string }) {
     setError("");
     try {
       const r = await fetch(
-        `/api/wallpapers/${id}/download?width=${resolutions[index].width}&height=${resolutions[index].height}&format=${format}`,
+        `/api/wallpapers/${id}/download?width=${resolutions[index].width}&height=${resolutions[index].height}&format=${format}&x=${new URLSearchParams(location.search).get("x") || 0.5}&y=${new URLSearchParams(location.search).get("y") || 0.5}`,
       );
       if (!r.ok) throw new Error((await r.json()).error);
       const b = await r.blob();

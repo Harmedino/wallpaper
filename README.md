@@ -1,5 +1,7 @@
 # Wallspace
 
+See [the latest editor, Smart Fit, Football Creator and API setup guide](UPGRADE-NOTES.md).
+
 React + TypeScript, Next.js App Router on Node.js, **MongoDB**, Tailwind 4 and a shadcn-style Radix Button. The worker is a separate Node.js process. Sharp handles real file validation, cropping, adjustments and encoding. MongoDB replaces the original brief's PostgreSQL/Prisma requirement, following the subsequent stack instruction.
 
 ## Local development
@@ -43,11 +45,11 @@ Inspect the **source page** and rights before approval. Compatible Commons own-w
 
 ## AI providers
 
-`AI_PROVIDER=none` (default) performs normal processing and labels results **resized**. If a configured provider fails, the worker also completes standard processing with an explicit “AI provider unavailable” label. Resizing is not super-resolution.
+`AI_PROVIDER=none` (default) performs normal processing and labels results **resized**. If requested AI is unconfigured or fails, export fails explicitly; standard processing is never silently substituted. Resizing is not super-resolution.
 
 **Self-hosted Real-ESRGAN:** configure `AI_PROVIDER=realesrgan` and `REALESRGAN_URL` to a trusted service accepting `POST multipart/form-data`, file field `image`, returning JPG/PNG/WebP bytes. Optional bearer token: REALESRGAN_TOKEN. Use a verified installation of [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN), trusted model weights and a GPU-capable service. Remote services require HTTPS; localhost HTTP is supported for development. This repository includes the client integration, not a bundled GPU runtime or model weights.
 
-**Replicate:** obtain a token at [Replicate account tokens](https://replicate.com/account/api-tokens). Set AI_PROVIDER=replicate, REPLICATE_API_TOKEN, and an audited, **pinned** REPLICATE_MODEL_VERSION from [nightmareai/real-esrgan API](https://replicate.com/nightmareai/real-esrgan/api). The adapter creates a prediction, polls its actual status and downloads the result. Add the exact result CDN host (often `replicate.delivery` or a provider-assigned subdomain) to IMAGE_ALLOWED_HOSTS and outbound policy; no wildcard remote fetching is enabled. Hosted processing sends the image to the provider and incurs its fees. Billing data is not inferred or fabricated.
+**Replicate:** obtain a token at [Replicate account tokens](https://replicate.com/account/api-tokens). Set AI_PROVIDER=replicate and REPLICATE_API_TOKEN. Optionally pin REPLICATE_MODEL_VERSION from [nightmareai/real-esrgan API](https://replicate.com/nightmareai/real-esrgan/api). The adapter creates a prediction, polls its actual status and downloads the result. Add the exact result CDN host (often `replicate.delivery` or a provider-assigned subdomain) to IMAGE_ALLOWED_HOSTS and outbound policy; no wildcard remote fetching is enabled. Hosted processing sends the image to the provider and incurs its fees. Billing data is not inferred or fabricated.
 
 **Neither provider is configured or externally validated in this cloud instance.** R2 and AI secrets must be entered securely in deployment settings, never committed. There are no fake AI-generated results.
 

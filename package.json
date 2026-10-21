@@ -20,7 +20,9 @@
     "test:db-recovery": "tsx scripts/database-recovery.ts",
     "test:scheduler": "tsx scripts/scheduler-smoke.ts",
     "test:storage": "tsx scripts/storage-smoke.ts",
-    "test:vercel": "tsx scripts/vercel-smoke.ts"
+    "test:vercel": "tsx scripts/vercel-smoke.ts",
+    "import:library": "tsx scripts/import-library.ts",
+    "test:ai": "tsx scripts/verify-ai.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1000.0",

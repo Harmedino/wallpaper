@@ -1,3 +1,11 @@
+import { gallerySearch, semanticFilter } from "@/lib/search";
+import {
+  createImportRun,
+  processImportStep,
+  importStatistics,
+} from "@/lib/ingestion";
+import { saveProject, getProject } from "@/lib/projects";
+import { imageQuality } from "@/lib/quality";
 import { wallpaperMedia } from "@/lib/wallpaper-media";
 import {
   photoCollectionStatus,
@@ -13,7 +21,7 @@ import { processNextJob } from "@/lib/processing";
 import { NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { limits, limitSchema } from "@/lib/limits";
-import { db, database, mongo } from "@/lib/db";
+import { db, database, mongo, ensureIndexes } from "@/lib/db";
 import {
   admin,
   session,
@@ -78,7 +86,7 @@ async function handle(
     const url = new URL(req.url);
     const mutation = req.method !== "GET";
     if (mutation) originCheck(req);
-    await mongo.connect();
+    await ensureIndexes();
     if (mutation && area !== "uploads" && req.body) {
       const reader = req.body.getReader();
       const chunks: Uint8Array[] = [];
@@ -87,7 +95,7 @@ async function handle(
         const part = await reader.read();
         if (part.done) break;
         size += part.value.length;
-        if (size > 16384) {
+        if (size > 65536) {
           await reader.cancel();
           throw new HttpError(413, "Request body too large");
         }
@@ -103,6 +111,18 @@ async function handle(
       return json({
         limits: await limits(),
         aiProvider: process.env.AI_PROVIDER || "none",
+        aiAvailable:
+          process.env.AI_PROVIDER === "replicate"
+            ? !!process.env.REPLICATE_API_TOKEN
+            : process.env.AI_PROVIDER === "realesrgan"
+              ? !!process.env.REALESRGAN_URL
+              : process.env.AI_PROVIDER === "local" && !process.env.VERCEL,
+        outpaintAvailable:
+          process.env.OUTPAINT_PROVIDER === "replicate" &&
+          !!process.env.REPLICATE_API_TOKEN,
+        supports8K:
+          process.env.ENABLE_8K === "true" &&
+          (await limits()).outputMegapixels >= 33,
       });
     if (area === "health") {
       await database.command({ ping: 1 });
@@ -140,6 +160,18 @@ async function handle(
     if (area === "wallpapers") {
       if (!id) {
         await ensureStarterCatalog();
+        const boot = await database
+          .collection("settings")
+          .updateOne(
+            { key: "verified-library-v1" },
+            { $setOnInsert: { createdAt: new Date() } },
+            { upsert: true },
+          );
+        if (boot.upsertedCount)
+          after(async () => {
+            await createImportRun("initial", 1000);
+            for (let i = 0; i < 3; i++) if (!(await processImportStep())) break;
+          });
         const collection = await photoCollectionStatus();
         if (collection.refreshing) after(replenishPhotoCollection);
         const q = (url.searchParams.get("q") || "").slice(0, 100),
@@ -153,7 +185,18 @@ async function handle(
           Math.min(1000, Number(url.searchParams.get("page")) || 1),
         );
         const where: any = { published: true };
-        if (q) where.$text = { $search: q };
+        const search = gallerySearch(q);
+        if (search.terms.length) where.$and = semanticFilter(search.terms);
+        if (search.color && !color) where.color = search.color;
+        if (search.portrait && !orientation)
+          where.$expr = { $gt: ["$height", "$width"] };
+        if (url.searchParams.get("kind") === "ai")
+          where.aiStatus = { $regex: "^AI-enhanced" };
+        if (url.searchParams.get("kind") === "native" || search.native4k)
+          where.$or = [
+            { width: { $gte: 3840 }, height: { $gte: 2160 } },
+            { width: { $gte: 2160 }, height: { $gte: 3840 } },
+          ];
         if (category) where.category = category;
         if (color) where.color = color;
         if (resolution === "4k") where.width = { $gte: 3840 };
@@ -199,6 +242,37 @@ async function handle(
       const w = await db.wallpaper.findUnique({ where: { id } });
       if (!w || (!w.published && (await session())?.role !== "admin"))
         throw new HttpError(404, "Wallpaper not found");
+      if (action === "edit" && req.method === "POST") {
+        const user = await session(true);
+        await rateLimit(`edit:${user!.id}`, 20);
+        if (!allowedLicense(w.license))
+          throw new HttpError(403, "This license does not permit edits");
+        const clean = await validateImage(await wallpaperMedia(w));
+        const key = `private/${user!.id}/${randomUUID()}.webp`;
+        await put(key, clean.bytes);
+        const upload = await db.upload.create({
+          data: {
+            ownerId: user!.id,
+            key,
+            width: clean.width,
+            height: clean.height,
+            hash: clean.hash,
+            sourceWallpaperId: w.id,
+            expiresAt: new Date(
+              Date.now() + (await limits()).retentionHours * 3600000,
+            ),
+          },
+        });
+        return json(
+          {
+            id: upload.id,
+            width: upload.width,
+            height: upload.height,
+            sourceWallpaperId: w.id,
+          },
+          201,
+        );
+      }
       if (action === "thumbnail") return image(await wallpaperMedia(w, true));
       if (action === "attribution")
         return new NextResponse(attribution(w as any), {
@@ -214,33 +288,41 @@ async function handle(
         const options = optionsSchema.parse({
           width: Number(url.searchParams.get("width") || 3840),
           height: Number(url.searchParams.get("height") || 2160),
+          x: Number(url.searchParams.get("x") || 0.5),
+          y: Number(url.searchParams.get("y") || 0.5),
           format: url.searchParams.get("format") || "jpg",
         });
-        let variant = await db.variant.findUnique({
+        let variant = await db.cropVariant.findUnique({
           where: {
             wallpaperId: id,
             width: options.width,
             height: options.height,
             format: options.format,
+            cropX: options.x,
+            cropY: options.y,
+            sourceHash: w.hash,
           },
         });
         let bytes: Buffer;
         if (variant) bytes = await get(variant.key);
         else {
           bytes = await render(await wallpaperMedia(w), options);
-          const key = `variants/${id}/${options.width}x${options.height}.${options.format}`;
+          const key = `variants/${id}/${options.width}x${options.height}-${options.x}-${options.y}-${w.hash.slice(0, 12)}.${options.format}`;
           await put(
             key,
             bytes,
             `image/${options.format === "jpg" ? "jpeg" : options.format}`,
           );
           try {
-            await db.variant.create({
+            await db.cropVariant.create({
               data: {
                 wallpaperId: id,
                 width: options.width,
                 height: options.height,
                 format: options.format,
+                cropX: options.x,
+                cropY: options.y,
+                sourceHash: w.hash,
                 key,
               },
             });
@@ -308,7 +390,7 @@ async function handle(
       const options = optionsSchema.parse(input.options);
       let scale = Math.min(1, 800 / Math.max(options.width, options.height));
       scale = Math.max(scale, 320 / Math.min(options.width, options.height));
-      let textBounds: TextBounds | null = null;
+      let textBounds: TextBounds[] = [];
       const photos = await studioPhotos(
         [
           ...options.photoIds,
@@ -326,7 +408,7 @@ async function handle(
           ai: false,
         },
         (bounds) => {
-          textBounds = bounds;
+          textBounds.push(bounds);
         },
         photos,
       );
@@ -380,7 +462,15 @@ async function handle(
             expiresAt: new Date(Date.now() + cap.retentionHours * 3600000),
           },
         });
-        return json({ id: row.id, width: row.width, height: row.height }, 201);
+        return json(
+          {
+            id: row.id,
+            width: row.width,
+            height: row.height,
+            quality: await imageQuality(clean.bytes),
+          },
+          201,
+        );
       }
       if (!id) {
         const rows = await db.upload.findMany({
@@ -418,10 +508,47 @@ async function handle(
         await db.upload.delete({ where: { id } });
         return json({ ok: true });
       }
+      if (!action && req.method === "GET")
+        return json({
+          id: upload.id,
+          width: upload.width,
+          height: upload.height,
+          sourceWallpaperId: upload.sourceWallpaperId,
+          expiresAt: upload.expiresAt,
+        });
       if (action === "image")
         return image(await get(upload.key), "image/webp", undefined, {
           "Cache-Control": "private, no-store",
         });
+    }
+    if (area === "projects") {
+      const user = await session(true);
+      if (req.method === "POST") {
+        await rateLimit(`projects:${user!.id}`, 30);
+        return json(await saveProject(user!.id, await req.json()), 201);
+      }
+      if (req.method === "DELETE" && id) {
+        await database
+          .collection("projects")
+          .deleteOne({ id, ownerId: user!.id });
+        return json({ ok: true });
+      }
+      if (id) {
+        const project = await getProject(user!.id, id);
+        if (!project) throw new HttpError(404, "Draft not found");
+        return json(project);
+      }
+      return json(
+        await database
+          .collection("projects")
+          .find(
+            { ownerId: user!.id, expiresAt: { $gt: new Date() } },
+            { projection: { _id: 0, id: 1, name: 1, updatedAt: 1 } },
+          )
+          .sort({ updatedAt: -1 })
+          .limit(20)
+          .toArray(),
+      );
     }
     if (area === "jobs") {
       const u = await session(true);
@@ -439,6 +566,14 @@ async function handle(
         });
         if (!upload) throw new HttpError(404, "Upload not found");
         const options = optionsSchema.parse(input.options);
+        if (
+          options.ai &&
+          (!process.env.AI_PROVIDER || process.env.AI_PROVIDER === "none")
+        )
+          throw new HttpError(
+            503,
+            "AI enhancement is not configured. Choose standard export or connect an AI provider.",
+          );
         if (options.width * options.height > cap.outputMegapixels * 1000000)
           throw new HttpError(400, "Output exceeds administrator pixel limit");
         await studioPhotos(
@@ -451,6 +586,7 @@ async function handle(
         const job = await db.job.create({
           data: {
             uploadId: upload.id,
+            wallpaperId: upload.sourceWallpaperId,
             ownerId: u!.id,
             status: "queued",
             progress: 0,
@@ -478,7 +614,14 @@ async function handle(
           url.searchParams.has("download")
             ? `wallpaper-${job.id}.${format}`
             : undefined,
-          { "Cache-Control": "private, no-store" },
+          {
+            "Cache-Control": "private, no-store",
+            ...(job.wallpaperId
+              ? {
+                  Link: `</api/wallpapers/${job.wallpaperId}/attribution>; rel="license"`,
+                }
+              : {}),
+          },
         );
       }
       if (
@@ -511,6 +654,7 @@ async function handle(
         });
         return json({
           wallpapers,
+          imports: await importStatistics(),
           downloads: wallpapers.reduce((s, w) => s + w.downloads, 0),
           candidates: await db.candidate.findMany({
             where: { status: "pending" },
@@ -524,6 +668,18 @@ async function handle(
           reports: await db.report.findMany({ take: 100 }),
           uploads: await db.upload.count(),
           aiProvider: process.env.AI_PROVIDER || "none",
+          aiAvailable:
+            process.env.AI_PROVIDER === "replicate"
+              ? !!process.env.REPLICATE_API_TOKEN
+              : process.env.AI_PROVIDER === "realesrgan"
+                ? !!process.env.REALESRGAN_URL
+                : process.env.AI_PROVIDER === "local" && !process.env.VERCEL,
+          outpaintAvailable:
+            process.env.OUTPAINT_PROVIDER === "replicate" &&
+            !!process.env.REPLICATE_API_TOKEN,
+          supports8K:
+            process.env.ENABLE_8K === "true" &&
+            (await limits()).outputMegapixels >= 33,
           limits: await limits(),
           storageUsage: await usage().catch(() => null),
           workerHeartbeat: await database
@@ -531,6 +687,17 @@ async function handle(
             .findOne({ key: "workerHeartbeat" }, { projection: { _id: 0 } }),
           storage: storageProvider(),
         });
+      }
+      if (id === "imports" && req.method === "POST") {
+        const body = await req.json();
+        const run = await createImportRun(
+          "manual",
+          Math.min(1000, Number(body.target) || 1000),
+        );
+        after(async () => {
+          for (let i = 0; i < 3; i++) if (!(await processImportStep())) break;
+        });
+        return json(run, 202);
       }
       if (id === "limits" && req.method === "POST") {
         const value = limitSchema.parse(await req.json());
@@ -815,6 +982,10 @@ async function handle(
             width: upload.width,
             height: upload.height,
             hash: upload.hash,
+            verifiedAt: new Date(),
+            verificationStatus: "admin-file-verified",
+            fileSize: bytes.length,
+            originalFormat: "webp",
             originalKey: key,
             thumbKey: thumb,
             creator: input.creator,

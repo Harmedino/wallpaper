@@ -1,13 +1,54 @@
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { remote } from "./network";
 import { fetch as fetchHttp, ProxyAgent, FormData } from "undici";
 import sharp from "sharp";
 // A self-hosted Real-ESRGAN HTTP service accepts multipart `image` and returns image bytes.
 export async function upscale(
   bytes: Buffer,
+  neededScale = 4,
 ): Promise<{ bytes: Buffer; status: string }> {
   const provider = process.env.AI_PROVIDER || "none";
+  const scale = neededScale <= 2 ? 2 : 4;
   if (provider === "none")
-    return { bytes, status: "resized — AI provider not configured" };
+    throw new Error(
+      "AI upscaling is not configured. Choose standard export or connect Real-ESRGAN/Replicate.",
+    );
+  if (provider === "local") {
+    if (process.env.VERCEL)
+      throw new Error(
+        "Local Real-ESRGAN requires a persistent worker; use Replicate on Vercel.",
+      );
+    const dir = await mkdtemp(path.join(tmpdir(), "wallspace-ai-"));
+    try {
+      const input = path.join(dir, "input.png"),
+        output = path.join(dir, "output.png");
+      await writeFile(input, await sharp(bytes).png().toBuffer());
+      await promisify(execFile)(
+        process.env.REALESRGAN_PYTHON || "python",
+        [
+          path.join(process.cwd(), "scripts/realesrgan-local.py"),
+          input,
+          output,
+          "--scale",
+          String(scale),
+          "--model",
+          process.env.REALESRGAN_MODEL ||
+            path.join(process.cwd(), ".data/models/realesr-general-x4v3.pth"),
+        ],
+        { timeout: 900000, maxBuffer: 1024 * 1024 },
+      );
+      return {
+        bytes: await readFile(output),
+        status: "AI-enhanced · Real-ESRGAN general x4v3 (local)",
+      };
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
   const dispatcher = process.env.HTTPS_PROXY
     ? new ProxyAgent(process.env.HTTPS_PROXY)
     : undefined;
@@ -55,23 +96,33 @@ export async function upscale(
     return { bytes: result, status: "AI-enhanced · Real-ESRGAN" };
   }
   if (provider !== "replicate") throw new Error("Unsupported AI provider");
-  if (!process.env.REPLICATE_API_TOKEN || !process.env.REPLICATE_MODEL_VERSION)
-    throw new Error(
-      "Replicate token and pinned Real-ESRGAN model version are required",
-    );
+  if (!process.env.REPLICATE_API_TOKEN)
+    throw new Error("REPLICATE_API_TOKEN is required");
   const headers = {
     Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}`,
     "Content-Type": "application/json",
   };
+  let version = process.env.REPLICATE_MODEL_VERSION;
+  if (!version) {
+    const model = await fetchHttp(
+      "https://api.replicate.com/v1/models/nightmareai/real-esrgan",
+      { dispatcher, headers, signal: AbortSignal.timeout(30000) },
+    );
+    if (!model.ok)
+      throw new Error(`Replicate model lookup returned ${model.status}`);
+    version = ((await model.json()) as any).latest_version?.id;
+    if (!version || !/^[a-f0-9]{64}$/.test(version))
+      throw new Error("Replicate did not return a valid Real-ESRGAN version");
+  }
   const response = await fetchHttp("https://api.replicate.com/v1/predictions", {
     method: "POST",
     dispatcher,
     headers,
     body: JSON.stringify({
-      version: process.env.REPLICATE_MODEL_VERSION,
+      version,
       input: {
         image: `data:image/webp;base64,${bytes.toString("base64")}`,
-        scale: 4,
+        scale,
         face_enhance: false,
       },
     }),

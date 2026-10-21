@@ -9,6 +9,12 @@ export function backgroundSvg(id: string, width = 1600, height = 1000) {
       `<circle cx="${(i * 173 + 31) % 1000}" cy="${(i * 97 + 13) % 620}" r="${(i % 3) + 1}" fill="white" opacity=".65"/>`,
   ).join("");
   const art: Record<string, string> = {
+    stadium:
+      '<ellipse cx="500" cy="570" rx="540" ry="210" fill="#111e32" stroke="#7bbac4" stroke-width="8"/><path d="M60 170L370 610H100Z M940 170L630 610H900Z" fill="#ceefff" opacity=".16"/><path d="M50 150V570M950 150V570" stroke="#849fae" stroke-width="12"/><rect x="10" y="130" width="100" height="30" rx="8" fill="#d5f5ff"/><rect x="890" y="130" width="100" height="30" rx="8" fill="#d5f5ff"/><path d="M0 590Q500 470 1000 590V700H0" fill="#12483d"/><path d="M0 630H1000" stroke="#ffffff" opacity=".4"/>',
+    pitch:
+      '<path d="M150 300H850L1100 700H-100Z" fill="#24603b" stroke="#d5eee0" stroke-width="4"/><path d="M500 300V700M50 490H950" stroke="#e1ffdf" stroke-width="3"/><ellipse cx="500" cy="490" rx="125" ry="55" fill="none" stroke="#e1ffdf" stroke-width="3"/><path d="M390 305V255H610V305" fill="none" stroke="#e1ffdf" stroke-width="6"/>',
+    trophy:
+      '<ellipse cx="500" cy="620" rx="300" ry="45" fill="#dfa94d" opacity=".25"/><path d="M0 0L450 700H200Z M1000 0L550 700H800Z" fill="#ffe5a1" opacity=".1"/><path d="M450 150H550L540 260Q500 320 460 260Z M480 290V390H520V290M455 390H545" fill="#c99944" opacity=".3"/>',
     mountains:
       '<circle cx="760" cy="170" r="85" fill="#fbe8b5"/><path d="M0 600L200 230 410 510 640 130 1000 650V700H0" fill="#78979a"/><path d="M0 700L270 350 510 660 790 310 1000 590V700" fill="#304c60"/><path d="M560 260L640 130 737 270 640 230Z" fill="#eeeade"/>',
     waves: Array.from(

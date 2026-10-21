@@ -1528,3 +1528,239 @@ header {
   font-size: 12px;
   pointer-events: none;
 }
+.studio-shape-handle {
+  position: absolute;
+  z-index: 2;
+  cursor: move;
+  touch-action: none;
+  border: 1px dashed transparent;
+}
+.studio-shape-handle:hover,
+.studio-shape-handle.selected {
+  border-color: #a1ffda;
+}
+.studio-safe-areas {
+  position: absolute;
+  inset: 8% 8% 10%;
+  border: 1px dashed #fffb;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 3;
+  font-size: 10px;
+  color: white;
+  text-shadow: 0 1px 3px black;
+}
+.studio-safe-areas span {
+  background: #0005;
+  padding: 5px;
+  text-align: center;
+}
+.draft-name {
+  width: 130px;
+  border: 1px solid #ffffff30;
+  border-radius: 15px;
+  background: #102019;
+  font-size: 12px;
+  padding: 7px 10px;
+}
+.device-preview {
+  text-align: center;
+}
+.device-preview label {
+  text-align: left;
+}
+.device-status {
+  position: absolute;
+  top: 9px;
+  left: 13px;
+  right: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: white;
+  text-shadow: 0 1px 3px black;
+}
+.device-status > span:last-child {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.os-android .phone-island {
+  width: 10px;
+  height: 10px;
+  top: 8px;
+}
+.device-app > span {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  color: white;
+  box-shadow: 0 3px 8px #0003;
+}
+.device-app small {
+  display: block;
+  font-size: 8px;
+  text-shadow: 0 1px 3px black;
+  margin-top: 3px;
+}
+.phone-dock {
+  display: flex;
+  justify-content: space-around;
+}
+.phone-dock svg {
+  width: 23px;
+  height: 23px;
+}
+.lock-widgets {
+  display: block;
+  background: #ffffff20;
+  border-radius: 20px;
+  padding: 8px;
+  margin-top: 12px;
+  backdrop-filter: blur(5px);
+}
+.desktop-interface {
+  position: absolute;
+  inset: 0;
+  color: white;
+  text-shadow: 0 1px 3px black;
+}
+.desktop-menu {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #0004;
+  text-align: left;
+  font-size: 9px;
+  padding: 5px 10px;
+}
+.desktop-icons {
+  position: absolute;
+  top: 35px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.desktop-icons > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 8px;
+  gap: 3px;
+}
+.desktop-taskbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #14273ad9;
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 8px 12px;
+}
+.desktop-taskbar > span {
+  margin-left: auto;
+  font-size: 10px;
+}
+.os-mac .desktop-taskbar {
+  left: 20%;
+  right: 20%;
+  bottom: 5px;
+  border-radius: 12px;
+  background: #ffffff50;
+}
+.os-mac .desktop-taskbar > span {
+  display: none;
+}
+.device-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #09120e;
+  overflow: auto;
+  padding: 20px;
+}
+.device-fullscreen .phone-mockup {
+  max-height: 75svh;
+}
+.device-desktop .phone-home-bar {
+  display: none;
+}
+.studio-mobile-back {
+  display: none;
+}
+@media (max-width: 900px) {
+  html:has(.studio-grid.has-upload) body {
+    overflow: hidden;
+  }
+  .studio-grid.has-upload {
+    position: fixed;
+    z-index: 30;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: calc(
+      min(55svh, calc((100vw - 16px) / var(--canvas-ratio, 1.777))) + 66px
+    );
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    display: block;
+    padding: 12px 12px 40px;
+    background: #0b1411;
+  }
+  .studio-grid.has-upload > .panel {
+    margin-top: 16px;
+  }
+  .studio-mobile-back {
+    display: block;
+    position: fixed;
+    top: 8px;
+    left: 12px;
+    z-index: 42;
+    background: #18392f;
+    color: #ceffed;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  .font-picker-popup {
+    z-index: 50;
+  }
+}
+
+/* Motion uses opacity and transforms; the route wrapper never transforms so
+   the editor's fixed mobile canvas keeps its viewport positioning. */
+.route-enter { animation: route-arrive 240ms ease-out; }
+@keyframes route-arrive { from { opacity: .35; } to { opacity: 1; } }
+.wall-grid > .wall-card { animation: card-arrive 420ms cubic-bezier(.2,.7,.2,1) backwards; }
+.wall-grid > .wall-card:nth-child(2) { animation-delay: 30ms; }
+.wall-grid > .wall-card:nth-child(3) { animation-delay: 60ms; }
+.wall-grid > .wall-card:nth-child(4) { animation-delay: 90ms; }
+.wall-grid > .wall-card:nth-child(5) { animation-delay: 120ms; }
+.wall-grid > .wall-card:nth-child(6) { animation-delay: 150ms; }
+@keyframes card-arrive { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+.nav-links a { position: relative; transition: color 180ms ease; }
+.nav-links a::after { content: ""; position: absolute; bottom: -7px; left: 0; right: 0; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform 200ms ease; }
+.nav-links a:hover::after, .nav-links a:focus-visible::after { transform: scaleX(1); }
+button, a.chip { transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+button:active:not(:disabled), a.chip:active { transform: scale(.98); }
+.phone-preview-dialog[open] { animation: dialog-arrive 220ms ease-out; }
+.phone-preview-dialog[open]::backdrop { animation: route-arrive 220ms ease-out; }
+@keyframes dialog-arrive { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.font-picker-popup { animation: dialog-arrive 160ms ease-out; }
+.studio-preview-loading { animation: route-arrive 160ms ease-out; }
+.loading-route { position: relative; overflow: hidden; }
+.loading-route::before { content: ""; position: absolute; top: 0; left: -35%; width: 35%; height: 2px; background: linear-gradient(90deg,transparent,#5eead4,transparent); animation: route-progress 1.2s ease-in-out infinite; }
+@keyframes route-progress { to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

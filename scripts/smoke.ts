@@ -98,7 +98,7 @@ const created = await request("/api/jobs", {
       format: "webp",
       x: 0,
       y: 1,
-      ai: true,
+      ai: false,
     },
   }),
 });
@@ -173,5 +173,5 @@ for (const p of [
 ])
   assert.equal((await request(p)).status, 200, p);
 console.log(
-  "PASS: private upload isolation, admin authorization, CSRF, durable worker progress, honest AI fallback, exact portrait 4K result, PNG public download, attribution, deletion, and all 12 pages.",
+  "PASS: private upload isolation, admin authorization, CSRF, durable worker progress, explicit standard resize, exact portrait 4K result, PNG public download, attribution, deletion, and all 12 pages.",
 );

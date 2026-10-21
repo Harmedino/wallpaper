@@ -142,6 +142,7 @@ export const db = {
   user: model("users"),
   wallpaper: model("wallpapers"),
   variant: model("variants"),
+  cropVariant: model("cropVariants"),
   upload: model("uploads"),
   job: model("jobs"),
   source: model("sources"),
@@ -151,7 +152,16 @@ export const db = {
   rateLimit: model("rateLimits"),
   report: model("reports"),
 };
-export async function ensureIndexes() {
+let indexReady: Promise<void> | undefined;
+export function ensureIndexes() {
+  if (!indexReady)
+    indexReady = createIndexes().catch((e) => {
+      indexReady = undefined;
+      throw e;
+    });
+  return indexReady;
+}
+async function createIndexes() {
   await mongo.connect();
   await Promise.all([
     database
@@ -179,6 +189,33 @@ export async function ensureIndexes() {
         { wallpaperId: 1, width: 1, height: 1, format: 1 },
         { unique: true },
       ),
+    database.collection("cropVariants").createIndex(
+      {
+        wallpaperId: 1,
+        width: 1,
+        height: 1,
+        format: 1,
+        cropX: 1,
+        cropY: 1,
+        sourceHash: 1,
+      },
+      { unique: true },
+    ),
+    database.collection("projects").createIndex({ id: 1 }, { unique: true }),
+    database.collection("projects").createIndex({ ownerId: 1, updatedAt: -1 }),
+    database
+      .collection("projects")
+      .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    database.collection("importRuns").createIndex({ id: 1 }, { unique: true }),
+    database
+      .collection("importRuns")
+      .createIndex({ status: 1, lockedUntil: 1 }),
+    database
+      .collection("importItems")
+      .createIndex({ runId: 1, candidateId: 1 }, { unique: true }),
+    database
+      .collection("importItems")
+      .createIndex({ runId: 1, status: 1, availableAt: 1 }),
     database.collection("sources").createIndex({ id: 1 }, { unique: true }),
   ]);
 }

@@ -9,6 +9,8 @@ const defaultHosts = [
   "images-api.nasa.gov",
   "images-assets.nasa.gov",
   "api.replicate.com",
+  "replicate.delivery",
+  "pbxt.replicate.delivery",
 ];
 export function permittedUrl(value: string) {
   const u = new URL(value);

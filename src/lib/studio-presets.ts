@@ -49,6 +49,9 @@ export const looks = [
   },
 ];
 export const backgrounds = [
+  { id: "stadium", name: "Floodlit stadium", a: "#040b20", b: "#163b49" },
+  { id: "pitch", name: "Matchday pitch", a: "#071b16", b: "#245c3d" },
+  { id: "trophy", name: "Golden arena", a: "#21160b", b: "#725023" },
   { id: "aurora", name: "Aurora", a: "#073b46", b: "#7e59bf" },
   { id: "sunset", name: "Sunset", a: "#f8a17a", b: "#4c3674" },
   { id: "midnight", name: "Midnight", a: "#071322", b: "#2d6087" },

@@ -51,7 +51,7 @@ test("Studio uploads, creates and downloads a real private result", async ({
   await expect(
     page.getByRole("heading", { name: "Your new perspective is ready." }),
   ).toBeVisible({ timeout: 30000 });
-  await expect(page.getByText(/resized. Cropped/)).toBeVisible();
+  await expect(page.getByText(/standard interpolation.*Cropped/)).toBeVisible();
   const promise = page.waitForEvent("download");
   await page.getByRole("link", { name: "Download finished wallpaper" }).click();
   const dl = await promise;

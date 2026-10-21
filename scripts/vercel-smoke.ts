@@ -116,7 +116,7 @@ try {
         width: 1080,
         height: 1920,
         format: "webp",
-        ai: true,
+        ai: false,
         backgroundMode: "blur",
         text: { content: "STAY CURIOUS", font: "serif", size: 0.08 },
       },

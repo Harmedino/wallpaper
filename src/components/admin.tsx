@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { LicensedBatch } from "./licensed-batch";
 import { Button } from "./ui/button";
 import { categories } from "@/lib/constants";
 import Link from "next/link";
@@ -175,6 +176,65 @@ export function Admin() {
         <>
           {tab === "overview" && (
             <>
+              {data.imports && (
+                <div className="panel mb-5">
+                  <h2 className="text-xl mb-4">Library growth</h2>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      [
+                        "Initial verified target",
+                        `${data.imports.verified} / 1,000`,
+                      ],
+                      ["Initial shortfall", data.imports.initialShortfall],
+                      ["Weekly additions", `${data.imports.weekly} / 1,000`],
+                      ["Rejected", data.imports.rejected],
+                      ["Duplicates", data.imports.duplicates],
+                      ["Awaiting review", data.imports.review],
+                      ["AI queue", data.imports.aiQueued],
+                      ["Processing failures", data.imports.failures],
+                    ].map(([label, value]) => (
+                      <div key={String(label)}>
+                        <p className="text-xs muted">{label}</p>
+                        <strong>{value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs muted my-4">{data.imports.costNote}</p>
+                  <button
+                    className="chip"
+                    disabled={busy}
+                    onClick={() =>
+                      act(
+                        () => api("admin/imports", { target: 1000 }),
+                        "Durable import run queued. A persistent worker drains the full queue; cron performs bounded batches.",
+                      )
+                    }
+                  >
+                    Import toward 1,000
+                  </button>
+                  <div className="mt-4 space-y-3">
+                    {data.imports.runs.map((run: any) => (
+                      <div key={run.id} className="text-xs muted">
+                        <strong>
+                          {run.kind}: {run.status}
+                        </strong>{" "}
+                        · {run.imported}/{run.target} imported ·{" "}
+                        {run.duplicates} duplicates · {run.review} review ·{" "}
+                        {run.failed} failures
+                        {run.lastError && (
+                          <p className="text-red-300">{run.lastError}</p>
+                        )}
+                        {run.shortfall > 0 && (
+                          <p>
+                            Shortfall: {run.shortfall} — sources exhausted or
+                            unavailable.
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 {[
                   [
@@ -417,6 +477,7 @@ export function Admin() {
               </div>
             </div>
           )}
+          {tab === "publish" && <LicensedBatch />}
           {tab === "publish" && (
             <div className="panel max-w-2xl">
               <h2 className="text-xl">Publish an original upload</h2>

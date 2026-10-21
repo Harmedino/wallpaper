@@ -11,31 +11,77 @@ import {
   Smartphone,
 } from "lucide-react";
 import Link from "next/link";
+import { useEditorHistory } from "./editor-history";
+import { ShapeHandles, type EditorShape } from "./shape-handles";
+import { resolutionAssessment } from "@/lib/quality-client";
+import { PhonePreview } from "./phone-preview";
 import { FontPicker } from "./font-picker";
 import { looks, backgrounds } from "@/lib/studio-presets";
 import { backgroundSvg } from "@/lib/backgrounds-svg";
 import { resolutions } from "@/lib/constants";
 import { Button } from "./ui/button";
-type Upload = { id: string; width: number; height: number };
+type Upload = {
+  id: string;
+  width: number;
+  height: number;
+  sourceWallpaperId?: string;
+};
 type Job = {
   id: string;
   status: string;
   progress: number;
   error?: string;
   aiStatus?: string;
+  verifiedWidth?: number;
+  verifiedHeight?: number;
+  verifiedFormat?: string;
   options?: { width: number; height: number; x: number; y: number };
 };
-export function Studio() {
+type EditorText = {
+  content: string;
+  font: string;
+  size: number;
+  color: string;
+  x: number;
+  y: number;
+  align: string;
+  shadow: boolean;
+  rotation?: number;
+  opacity?: number;
+  spacing?: number;
+  outline?: number;
+  outlineColor?: string;
+  gradient?: string;
+};
+const emptyText: EditorText = {
+  content: "",
+  font: "sans",
+  size: 0.06,
+  color: "#ffffff",
+  x: 0.5,
+  y: 0.5,
+  align: "center",
+  shadow: true,
+};
+export function Studio({
+  mode = "studio",
+}: {
+  mode?: "studio" | "smart-fit" | "football";
+}) {
   const [caps, setCaps] = useState({
     uploadMb: 20,
     outputMegapixels: 16,
     retentionHours: 24,
   });
   useEffect(() => {
+    if (window.matchMedia("(max-width:900px)").matches) setIndex(7);
     fetch("/api/capabilities")
       .then((r) => r.json())
       .then((d) => {
         if (d.limits) setCaps(d.limits);
+        setAiAvailable(!!d.aiAvailable);
+        setOutpaintAvailable(!!d.outpaintAvailable);
+        setSupports8K(!!d.supports8K);
       })
       .catch(() => {});
   }, []);
@@ -50,12 +96,9 @@ export function Studio() {
   const [grid, setGrid] = useState("single");
   const [photos, setPhotos] = useState<Upload[]>([]);
   const collageRef = useRef<HTMLInputElement>(null);
-  const [textBounds, setTextBounds] = useState<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null>(null);
+  const [layerBounds, setLayerBounds] = useState<
+    Array<{ left: number; top: number; width: number; height: number }>
+  >([]);
   const dragRef = useRef<{
     x: number;
     y: number;
@@ -77,16 +120,153 @@ export function Studio() {
   const [flop, setFlop] = useState(false);
   const [vignette, setVignette] = useState(false);
   const [look, setLook] = useState("original");
-  const [text, setText] = useState({
-    content: "",
-    font: "sans",
-    size: 0.06,
-    color: "#ffffff",
-    x: 0.5,
-    y: 0.5,
-    align: "center",
-    shadow: true,
-  });
+  const [textLayers, setTextLayers] = useState<EditorText[]>([
+    { ...emptyText },
+  ]);
+  const [selectedText, setSelectedText] = useState(0);
+  const text = textLayers[selectedText] || emptyText;
+  const textBounds = layerBounds[selectedText] || null;
+  const setText: React.Dispatch<React.SetStateAction<EditorText>> = (value) =>
+    setTextLayers((layers) =>
+      layers.map((t, i) =>
+        i === selectedText
+          ? typeof value === "function"
+            ? value(t)
+            : value
+          : t,
+      ),
+    );
+  const [shapes, setShapes] = useState<EditorShape[]>([]);
+  const [selectedShape, setSelectedShape] = useState("");
+  const [outpaint, setOutpaint] = useState(false);
+  const [outpaintAvailable, setOutpaintAvailable] = useState(false);
+  const [outpaintPrompt, setOutpaintPrompt] = useState(
+    "Extend the existing scene naturally, matching perspective and lighting.",
+  );
+  const [faceStatus, setFaceStatus] = useState("");
+  const [faceBusy, setFaceBusy] = useState(false);
+  const [playerName, setPlayerName] = useState("YOUR NAME");
+  const [jersey, setJersey] = useState("10");
+  const [motto, setMotto] = useState("BUILT FOR THE BIG MOMENTS");
+  const [teamColor, setTeamColor] = useState("#36ead2");
+  const [footballEffects, setFootballEffects] = useState<
+    | {
+        lighting: number;
+        smoke: number;
+        glow: number;
+        primary: string;
+        secondary: string;
+        pitch: boolean;
+      }
+    | undefined
+  >();
+  async function fitDetectedFace() {
+    if (!upload) return;
+    setFaceBusy(true);
+    setFaceStatus("Loading face detector and analyzing your photo…");
+    try {
+      const { detectFaces, fitFace } = await import("@/lib/face-fit");
+      const response = await fetch(`/api/uploads/${upload.id}/image`);
+      if (!response.ok) throw new Error("Could not load your original photo");
+      const faces = await detectFaces(await response.blob());
+      if (!faces.length) {
+        setFaceStatus(
+          "No face detected. Use subject crop or position the image manually.",
+        );
+        return;
+      }
+      const fit = fitFace(upload, target, faces[0]);
+      setSmartCrop(false);
+      setZoom(1);
+      setX(fit.x);
+      setY(fit.subjectY);
+      setBackgroundMode(fit.mode);
+      setPadding(fit.padding);
+      setSafeAreas(true);
+      setFaceStatus(
+        `${faces.length} face${faces.length === 1 ? "" : "s"} detected. ${fit.protectWithFrame ? "Full-photo framing protects the face from the clock." : "Crop positioned around the largest face."} You can adjust it manually.`,
+      );
+    } catch (e) {
+      setFaceStatus(
+        e instanceof Error
+          ? e.message
+          : "Face detection unavailable; use manual positioning.",
+      );
+    } finally {
+      setFaceBusy(false);
+    }
+  }
+  function applyFootballPreset(name: string, i: number) {
+    const palettes = [
+      "#36ead2",
+      "#326aff",
+      "#777777",
+      "#de32ff",
+      "#e9b94f",
+      "#ffffff",
+      "#ff4747",
+      "#79e84b",
+    ];
+    const color = teamColor === "#36ead2" ? palettes[i] : teamColor;
+    setFootballEffects({
+      lighting: i === 5 ? 0.1 : 0.6,
+      smoke: i === 5 ? 0 : 0.35,
+      glow: i === 5 ? 0.1 : 0.65,
+      primary: color,
+      secondary: i === 4 ? "#a56f12" : "#091a42",
+      pitch: i === 7,
+    });
+    setTextLayers([
+      {
+        ...emptyText,
+        content: playerName,
+        font: "anton",
+        size: 0.095,
+        y: 0.74,
+        color,
+        outline: 0.002,
+        outlineColor: "#101010",
+      },
+      {
+        ...emptyText,
+        content: jersey,
+        font: "bebasneue",
+        size: 0.2,
+        y: 0.48,
+        color: "#ffffff",
+        opacity: 0.75,
+      },
+      {
+        ...emptyText,
+        content: motto,
+        font: "spacegrotesk",
+        size: 0.025,
+        y: 0.87,
+        spacing: 0.04,
+      },
+    ]);
+    setSelectedText(0);
+    setVignette(i !== 5);
+    setDraftName(name);
+    setBackgroundMode("crop");
+  }
+  const [smartCrop, setSmartCrop] = useState(true);
+  const [zoom, setZoom] = useState(1),
+    [exposure, setExposure] = useState(0),
+    [highlights, setHighlights] = useState(0),
+    [temperature, setTemperature] = useState(0),
+    [clarity, setClarity] = useState(0);
+  const [safeAreas, setSafeAreas] = useState(false),
+    [showOriginal, setShowOriginal] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(false),
+    [supports8K, setSupports8K] = useState(false);
+  const [draftMessage, setDraftMessage] = useState("");
+  const [drafts, setDrafts] = useState<
+    Array<{ id: string; name: string; updatedAt: string }>
+  >([]);
+  const [devicePreview, setDevicePreview] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("My wallpaper");
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const [preview, setPreview] = useState("");
   const [previewBusy, setPreviewBusy] = useState(false);
@@ -134,6 +314,7 @@ export function Studio() {
       setUpload(d);
       setSourceKind("photo");
       setOriginalPhoto(d);
+      setProjectId(null);
       setCutoutDone(false);
       setX(0.5);
       setY(0.5);
@@ -264,6 +445,14 @@ export function Studio() {
       setCutoutDone(false);
     }
     setBackgroundPhoto(null);
+    setTextLayers([{ ...emptyText }]);
+    setSelectedText(0);
+    setShapes([]);
+    setZoom(1);
+    setExposure(0);
+    setHighlights(0);
+    setTemperature(0);
+    setClarity(0);
     setBrightness(1);
     setSaturation(1);
     setContrast(1);
@@ -316,9 +505,180 @@ export function Studio() {
     flip,
     flop,
     vignette,
-    text,
+    textLayers,
+    shapes,
+    zoom,
+    smartCrop,
+    footballEffects,
+    exposure,
+    highlights,
+    temperature,
+    clarity,
     format: "webp",
   });
+  const assessment = resolutionAssessment(upload || target, {
+    ...target,
+    rotation,
+    zoom,
+    smartCrop,
+  });
+  function applySnapshot(snapshot: string) {
+    const d = JSON.parse(snapshot),
+      o = d.options;
+    setFormat(o.format || "jpg");
+    setAi(!!o.ai);
+    setUpload(d.upload);
+    setOriginalPhoto(d.originalPhoto || d.upload);
+    setCutoutDone(!!d.cutoutDone);
+    setSourceKind(d.sourceKind || "photo");
+    setBackgroundPhoto(d.backgroundPhoto || null);
+    setPhotos(d.photos || []);
+    setCustom(true);
+    setWidth(o.width);
+    setHeight(o.height);
+    setX(o.x ?? 0.5);
+    setY(o.y ?? 0.5);
+    setBrightness(o.brightness ?? 1);
+    setSaturation(o.saturation ?? 1);
+    setContrast(o.contrast ?? 1);
+    setSharpen(!!o.sharpen);
+    setDenoise(!!o.denoise);
+    setCinematic(!!o.cinematic);
+    setBackgroundMode(o.backgroundMode || "crop");
+    setBackgroundTemplate(o.backgroundTemplate || "aurora");
+    setBackgroundColor(o.backgroundColor || "#101a20");
+    setPadding(o.padding ?? 0.06);
+    setRadius(o.radius ?? 0);
+    setRotation(o.rotation || 0);
+    setFlip(!!o.flip);
+    setFlop(!!o.flop);
+    setVignette(!!o.vignette);
+    setGrid(o.grid || "single");
+    setTextLayers(
+      o.textLayers?.length ? o.textLayers : [o.text || { ...emptyText }],
+    );
+    setSelectedText(0);
+    setShapes(o.shapes || []);
+    setZoom(o.zoom || 1);
+    setSmartCrop(!!o.smartCrop);
+    setFootballEffects(o.footballEffects);
+    setOutpaint(!!o.outpaint);
+    setOutpaintPrompt(
+      o.outpaintPrompt || "Extend the existing scene naturally.",
+    );
+    setExposure(o.exposure || 0);
+    setHighlights(o.highlights || 0);
+    setTemperature(o.temperature || 0);
+    setClarity(o.clarity || 0);
+    setJob(null);
+  }
+  const snapshot = JSON.stringify({
+    upload,
+    originalPhoto,
+    sourceKind,
+    cutoutDone,
+    photos,
+    backgroundPhoto,
+    options: {
+      ...JSON.parse(previewOptions),
+      format,
+      ai,
+      outpaint,
+      outpaintPrompt,
+    },
+  });
+  const history = useEditorHistory(snapshot, applySnapshot);
+  async function saveDraft() {
+    if (!upload) return;
+    history.checkpoint();
+    setBusy(true);
+    try {
+      const r = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: projectId,
+          name: draftName,
+          uploadId: upload.id,
+          originalUploadId: originalPhoto?.id,
+          sourceKind,
+          cutoutDone,
+          options: {
+            ...JSON.parse(previewOptions),
+            format,
+            ai,
+            outpaint,
+            outpaintPrompt,
+          },
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setProjectId(d.id);
+      setDraftMessage("Draft saved. Private images are kept for 7 days.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save draft");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function loadDrafts() {
+    try {
+      const r = await fetch("/api/projects");
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setDrafts(d);
+      setDraftMessage(
+        d.length ? "Choose a draft to continue." : "No saved drafts yet.",
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load drafts");
+    }
+  }
+  async function openDraft(id: string) {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/projects/" + id);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setProjectId(d.id);
+      setDraftName(d.name);
+      const pick = (id: string) => d.uploads.find((u: Upload) => u.id === id);
+      applySnapshot(
+        JSON.stringify({
+          upload: pick(d.uploadId),
+          originalPhoto: pick(d.originalUploadId) || pick(d.uploadId),
+          sourceKind: d.sourceKind,
+          cutoutDone: d.cutoutDone,
+          backgroundPhoto: pick(d.options.backgroundPhotoId),
+          photos: d.options.photoIds.map(pick),
+          options: d.options,
+        }),
+      );
+      setDrafts([]);
+      setDraftMessage("Draft restored.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not restore draft");
+    } finally {
+      setBusy(false);
+    }
+  }
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const id = p.get("uploadId");
+    if (id)
+      fetch("/api/uploads/" + encodeURIComponent(id))
+        .then(async (r) => {
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error);
+          setUpload(d);
+          setOriginalPhoto(d);
+          if (p.get("intent") === "text")
+            setTextLayers([{ ...emptyText, content: "Your words here" }]);
+          if (p.get("intent") === "enhance") setAi(true);
+        })
+        .catch((e) => setError(e.message));
+  }, []);
   useEffect(() => {
     if (!upload) return;
     const c = new AbortController();
@@ -336,7 +696,8 @@ export function Studio() {
           signal: c.signal,
         });
         if (!r.ok) throw new Error((await r.json()).error);
-        setTextBounds(JSON.parse(r.headers.get("X-Text-Bounds") || "null"));
+        const bounds = JSON.parse(r.headers.get("X-Text-Bounds") || "[]");
+        setLayerBounds(Array.isArray(bounds) ? bounds : bounds ? [bounds] : []);
         const next = URL.createObjectURL(await r.blob());
         if (c.signal.aborted) {
           URL.revokeObjectURL(next);
@@ -398,7 +759,17 @@ export function Studio() {
             flip,
             flop,
             vignette,
-            text,
+            textLayers,
+            shapes,
+            zoom,
+            smartCrop,
+            footballEffects,
+            outpaint,
+            outpaintPrompt,
+            exposure,
+            highlights,
+            temperature,
+            clarity,
           },
         }),
       });
@@ -437,7 +808,11 @@ export function Studio() {
       <div className="text-center mb-12">
         <p className="eyebrow">A LITTLE CREATIVITY. A WHOLE NEW VIEW.</p>
         <h1 className="page-title">
-          AI Wallpaper{" "}
+          {mode === "football"
+            ? "Football Wallpaper"
+            : mode === "smart-fit"
+              ? "Smart Wallpaper Fit"
+              : "AI Wallpaper"}{" "}
           <span className="text-teal-200 italic font-serif">Studio.</span>
         </h1>
         <p className="muted text-sm max-w-xl mx-auto leading-7">
@@ -445,6 +820,25 @@ export function Studio() {
           super-resolution is available when a processing provider is connected.
         </p>
       </div>
+      {devicePreview && upload && (
+        <PhonePreview
+          wallpaper={{
+            id: upload.id,
+            title: "Your edited wallpaper",
+            imageSrc: preview || `/api/uploads/${upload.id}/image`,
+          }}
+          onClose={() => setDevicePreview(false)}
+          onCropChange={(nx, ny) => {
+            setX(nx);
+            setY(ny);
+          }}
+          onDeviceChange={(w, h) => {
+            setCustom(true);
+            setWidth(w);
+            setHeight(h);
+          }}
+        />
+      )}
       <div
         style={
           {
@@ -459,6 +853,9 @@ export function Studio() {
       >
         <div className={"studio-canvas-column " + (job ? "has-result" : "")}>
           <div className="panel">
+            <Link className="studio-mobile-back" href="/explore">
+              ← Explore
+            </Link>
             <div className="flex justify-between text-xs text-slate-400 mb-5">
               <span>01 / YOUR CANVAS</span>
               {upload && (
@@ -467,6 +864,88 @@ export function Studio() {
                 </span>
               )}
             </div>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                className="chip"
+                disabled={!history.canUndo}
+                onClick={history.undo}
+              >
+                Undo
+              </button>
+              <button
+                className="chip"
+                disabled={!history.canRedo}
+                onClick={history.redo}
+              >
+                Redo
+              </button>
+              <input
+                aria-label="Draft name"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                className="draft-name"
+              />
+              <button
+                className="chip"
+                disabled={!upload || busy}
+                onClick={saveDraft}
+              >
+                Save draft
+              </button>
+              <button
+                className="chip"
+                disabled={!upload}
+                onClick={() => setDevicePreview(true)}
+              >
+                Preview on device
+              </button>
+              <button className="chip" onClick={loadDrafts}>
+                Open drafts
+              </button>
+              <button
+                className="chip"
+                onClick={() => setShowOriginal(!showOriginal)}
+              >
+                {showOriginal ? "Show edits" : "Before / after"}
+              </button>
+              <button
+                className={"chip " + (safeAreas ? "active" : "")}
+                onClick={() => setSafeAreas(!safeAreas)}
+              >
+                Safe-area guides
+              </button>
+            </div>
+            {draftMessage && (
+              <p role="status" className="text-xs text-teal-200 mb-3">
+                {draftMessage}
+              </p>
+            )}
+            {drafts.length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                {drafts.map((d) => (
+                  <span key={d.id} className="flex gap-1">
+                    <button className="chip" onClick={() => openDraft(d.id)}>
+                      {d.name}
+                    </button>
+                    <button
+                      className="chip"
+                      aria-label={`Delete draft ${d.name}`}
+                      onClick={async () => {
+                        const r = await fetch(`/api/projects/${d.id}`, {
+                          method: "DELETE",
+                        });
+                        if (r.ok) {
+                          setDrafts(drafts.filter((item) => item.id !== d.id));
+                          if (projectId === d.id) setProjectId(null);
+                        } else setError("Could not delete draft");
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="studio-template-strip">
               <p className="text-xs muted mb-3">
                 Replace your background · AI keeps the subject
@@ -552,7 +1031,11 @@ export function Studio() {
                   </button>
                   <img
                     draggable={false}
-                    src={preview || `/api/uploads/${upload.id}/image`}
+                    src={
+                      showOriginal
+                        ? `/api/uploads/${(originalPhoto || upload).id}/image`
+                        : preview || `/api/uploads/${upload.id}/image`
+                    }
                     alt="Edited wallpaper preview"
                     className="w-full h-full object-cover"
                     style={{
@@ -561,130 +1044,156 @@ export function Studio() {
                         : `${x * 100}% ${y * 100}%`,
                     }}
                   />
-                  {text.content.trim() && textBounds && (
+                  {safeAreas && (
                     <div
-                      role="button"
-                      tabIndex={0}
-                      aria-label="Move text on canvas"
-                      className="studio-text-selection"
-                      style={{
-                        left: `${text.x * (1 - textBounds.width) * 100}%`,
-                        top: `${text.y * (1 - textBounds.height) * 100}%`,
-                        width: `${textBounds.width * 100}%`,
-                        height: `${textBounds.height * 100}%`,
-                      }}
-                      onKeyDown={(e) => {
-                        const delta = e.shiftKey ? 0.05 : 0.01;
-                        if (
-                          [
-                            "ArrowLeft",
-                            "ArrowRight",
-                            "ArrowUp",
-                            "ArrowDown",
-                          ].includes(e.key)
-                        ) {
-                          e.preventDefault();
-                          setText((t) => ({
-                            ...t,
-                            x: Math.max(
-                              0,
-                              Math.min(
-                                1,
-                                t.x +
-                                  (e.key === "ArrowRight"
-                                    ? delta
-                                    : e.key === "ArrowLeft"
-                                      ? -delta
-                                      : 0),
-                              ),
-                            ),
-                            y: Math.max(
-                              0,
-                              Math.min(
-                                1,
-                                t.y +
-                                  (e.key === "ArrowDown"
-                                    ? delta
-                                    : e.key === "ArrowUp"
-                                      ? -delta
-                                      : 0),
-                              ),
-                            ),
-                          }));
-                        }
-                      }}
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                        const rect =
-                          e.currentTarget.parentElement!.getBoundingClientRect();
-                        dragRef.current = {
-                          x: e.clientX,
-                          y: e.clientY,
-                          tx: text.x,
-                          ty: text.y,
-                          size: text.size,
-                          mode: (e.target as HTMLElement).dataset.resize
-                            ? "resize"
-                            : "move",
-                          width: rect.width,
-                          height: rect.height,
-                          bw: textBounds.width,
-                          bh: textBounds.height,
-                        };
-                      }}
-                      onPointerMove={(e) => {
-                        const d = dragRef.current;
-                        if (!d) return;
-                        const dx = e.clientX - d.x,
-                          dy = e.clientY - d.y;
-                        const clamp = (n: number, min = 0, max = 1) =>
-                          Math.max(min, Math.min(max, n));
-                        setText((t) =>
-                          d.mode === "resize"
-                            ? {
-                                ...t,
-                                size: clamp(
-                                  d.size *
-                                    (1 +
-                                      (dx + dy) /
-                                        Math.max(
-                                          30,
-                                          d.bw * d.width + d.bh * d.height,
-                                        )),
-                                  0.02,
-                                  0.2,
-                                ),
-                              }
-                            : {
-                                ...t,
-                                x: clamp(
-                                  d.tx + dx / Math.max(1, d.width * (1 - d.bw)),
-                                ),
-                                y: clamp(
-                                  d.ty +
-                                    dy / Math.max(1, d.height * (1 - d.bh)),
-                                ),
-                              },
-                        );
-                      }}
-                      onPointerUp={() => {
-                        dragRef.current = null;
-                      }}
-                      onPointerCancel={() => {
-                        dragRef.current = null;
-                      }}
+                      className="studio-safe-areas"
+                      aria-label="Safe area guides · not included in export"
                     >
-                      <span className="studio-text-hint">
-                        Drag text · resize corner
-                      </span>
-                      <span
-                        data-resize="true"
-                        className="studio-text-resize"
-                        aria-label="Resize text"
-                      />
+                      <span>Clock / widgets</span>
+                      <span>Dock / controls</span>
                     </div>
                   )}
+                  {!showOriginal && (
+                    <ShapeHandles
+                      shapes={shapes}
+                      selected={selectedShape}
+                      onSelect={setSelectedShape}
+                      onChange={(shape) =>
+                        setShapes(
+                          shapes.map((s) => (s.id === shape.id ? shape : s)),
+                        )
+                      }
+                    />
+                  )}
+                  {!showOriginal &&
+                    text.content.trim() &&
+                    textBounds &&
+                    textBounds.width > 0 &&
+                    textBounds.height > 0 && (
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Move text on canvas"
+                        className="studio-text-selection"
+                        style={{
+                          left: `${text.x * (1 - textBounds.width) * 100}%`,
+                          top: `${text.y * (1 - textBounds.height) * 100}%`,
+                          width: `${textBounds.width * 100}%`,
+                          height: `${textBounds.height * 100}%`,
+                        }}
+                        onKeyDown={(e) => {
+                          const delta = e.shiftKey ? 0.05 : 0.01;
+                          if (
+                            [
+                              "ArrowLeft",
+                              "ArrowRight",
+                              "ArrowUp",
+                              "ArrowDown",
+                            ].includes(e.key)
+                          ) {
+                            e.preventDefault();
+                            setText((t) => ({
+                              ...t,
+                              x: Math.max(
+                                0,
+                                Math.min(
+                                  1,
+                                  t.x +
+                                    (e.key === "ArrowRight"
+                                      ? delta
+                                      : e.key === "ArrowLeft"
+                                        ? -delta
+                                        : 0),
+                                ),
+                              ),
+                              y: Math.max(
+                                0,
+                                Math.min(
+                                  1,
+                                  t.y +
+                                    (e.key === "ArrowDown"
+                                      ? delta
+                                      : e.key === "ArrowUp"
+                                        ? -delta
+                                        : 0),
+                                ),
+                              ),
+                            }));
+                          }
+                        }}
+                        onPointerDown={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                          const rect =
+                            e.currentTarget.parentElement!.getBoundingClientRect();
+                          dragRef.current = {
+                            x: e.clientX,
+                            y: e.clientY,
+                            tx: text.x,
+                            ty: text.y,
+                            size: text.size,
+                            mode: (e.target as HTMLElement).dataset.resize
+                              ? "resize"
+                              : "move",
+                            width: rect.width,
+                            height: rect.height,
+                            bw: textBounds.width,
+                            bh: textBounds.height,
+                          };
+                        }}
+                        onPointerMove={(e) => {
+                          const d = dragRef.current;
+                          if (!d) return;
+                          const dx = e.clientX - d.x,
+                            dy = e.clientY - d.y;
+                          const clamp = (n: number, min = 0, max = 1) =>
+                            Math.max(min, Math.min(max, n));
+                          setText((t) =>
+                            d.mode === "resize"
+                              ? {
+                                  ...t,
+                                  size: clamp(
+                                    d.size *
+                                      (1 +
+                                        (dx + dy) /
+                                          Math.max(
+                                            30,
+                                            d.bw * d.width + d.bh * d.height,
+                                          )),
+                                    0.02,
+                                    0.2,
+                                  ),
+                                }
+                              : {
+                                  ...t,
+                                  x: clamp(
+                                    d.tx +
+                                      dx / Math.max(1, d.width * (1 - d.bw)),
+                                  ),
+                                  y: clamp(
+                                    d.ty +
+                                      dy / Math.max(1, d.height * (1 - d.bh)),
+                                  ),
+                                },
+                          );
+                        }}
+                        onPointerUp={() => {
+                          dragRef.current = null;
+                        }}
+                        onPointerCancel={() => {
+                          dragRef.current = null;
+                        }}
+                      >
+                        <span className="studio-text-hint">
+                          Drag text · resize corner
+                        </span>
+                        <span
+                          data-resize="true"
+                          className="studio-text-resize"
+                          aria-label="Resize text"
+                        />
+                      </div>
+                    )}
                 </div>
                 <div className="grid grid-cols-2 gap-5 mt-5">
                   <label className="field">
@@ -695,7 +1204,10 @@ export function Studio() {
                       max="1"
                       step=".01"
                       value={x}
-                      onChange={(e) => setX(+e.target.value)}
+                      onChange={(e) => {
+                        setSmartCrop(false);
+                        setX(+e.target.value);
+                      }}
                     />
                   </label>
                   <label className="field">
@@ -706,7 +1218,10 @@ export function Studio() {
                       max="1"
                       step=".01"
                       value={y}
-                      onChange={(e) => setY(+e.target.value)}
+                      onChange={(e) => {
+                        setSmartCrop(false);
+                        setY(+e.target.value);
+                      }}
                     />
                   </label>
                 </div>
@@ -807,6 +1322,20 @@ export function Studio() {
                       onChange={(e) => setCompare(+e.target.value)}
                     />
                   </label>
+                  {job.verifiedWidth && (
+                    <p className="text-xs text-teal-200 mt-4">
+                      Verified export: {job.verifiedWidth} ×{" "}
+                      {job.verifiedHeight} · {job.verifiedFormat}
+                    </p>
+                  )}
+                  {upload?.sourceWallpaperId && (
+                    <a
+                      className="text-xs text-teal-200 underline"
+                      href={`/api/wallpapers/${upload.sourceWallpaperId}/attribution`}
+                    >
+                      Download required source attribution
+                    </a>
+                  )}
                   <Button asChild className="w-full mt-5">
                     <a href={`/api/jobs/${job.id}/result?download=1`}>
                       <Download size={16} />
@@ -832,11 +1361,13 @@ export function Studio() {
                 }
               }}
             >
-              {resolutions.map((r, i) => (
-                <option value={i} key={i}>
-                  {r.label} · {r.width} × {r.height}
-                </option>
-              ))}
+              {resolutions
+                .filter((r) => r.width < 7680 || supports8K)
+                .map((r, i) => (
+                  <option value={i} key={i}>
+                    {r.label} · {r.width} × {r.height}
+                  </option>
+                ))}
               <option value="custom">Custom dimensions</option>
             </select>
           </label>
@@ -847,7 +1378,7 @@ export function Studio() {
                 <input
                   type="number"
                   min="320"
-                  max="5120"
+                  max={supports8K ? 7680 : 5120}
                   value={width}
                   onChange={(e) => setWidth(+e.target.value)}
                 />
@@ -857,7 +1388,7 @@ export function Studio() {
                 <input
                   type="number"
                   min="320"
-                  max="5120"
+                  max={supports8K ? 7680 : 5120}
                   value={height}
                   onChange={(e) => setHeight(+e.target.value)}
                 />
@@ -876,6 +1407,7 @@ export function Studio() {
             <label className="flex gap-3 items-center">
               <input
                 type="checkbox"
+                disabled={!aiAvailable && !ai}
                 checked={ai}
                 onChange={(e) => setAi(e.target.checked)}
               />
@@ -883,9 +1415,21 @@ export function Studio() {
               super-resolution
             </label>
             <p className="text-xs muted leading-5 mt-3 mb-0">
-              Uses Real-ESRGAN when configured. If unavailable, the result is
-              clearly labeled as resized. AI cannot guarantee recovery of
-              missing detail.
+              {!aiAvailable && (
+                <>
+                  AI upscaling is not connected.{" "}
+                  <button
+                    className="text-teal-200 underline"
+                    onClick={() => setAi(false)}
+                  >
+                    Use standard export
+                  </button>
+                  <br />
+                </>
+              )}
+              Real-ESRGAN adds model-estimated detail when connected. Provider
+              errors stop export; ordinary resizing is never silently
+              substituted. Missing detail cannot be perfectly recovered.
             </p>
           </div>
           <div className="studio-edit-section">
@@ -1141,7 +1685,199 @@ export function Studio() {
                 {cutoutProgress}
               </p>
             )}
+            <div className="flex flex-wrap gap-2 mb-5">
+              <Link className="chip" href="/studio">
+                Studio
+              </Link>
+              <Link className="chip" href="/smart-fit">
+                Smart Fit
+              </Link>
+              <Link className="chip" href="/football-creator">
+                Football Creator
+              </Link>
+            </div>
+            {mode === "football" && (
+              <section className="panel mb-6">
+                <h2>Build your football poster</h2>
+                <p className="muted text-xs mb-4">
+                  Use your own player photo or a licensed image. Presets add
+                  editable layers; background replacement uses Remove original
+                  background above.
+                </p>
+                <label className="field">
+                  Player name
+                  <input
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    maxLength={80}
+                  />
+                </label>
+                <label className="field">
+                  Jersey number
+                  <input
+                    value={jersey}
+                    onChange={(e) => setJersey(e.target.value)}
+                    maxLength={3}
+                  />
+                </label>
+                <label className="field">
+                  Motivational text
+                  <input
+                    value={motto}
+                    onChange={(e) => setMotto(e.target.value)}
+                    maxLength={160}
+                  />
+                </label>
+                <label className="field">
+                  Team color
+                  <input
+                    type="color"
+                    value={teamColor}
+                    onChange={(e) => setTeamColor(e.target.value)}
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-2 mt-4">
+                  {[
+                    "Stadium Night",
+                    "Champions Theme",
+                    "Dark Football",
+                    "Neon Football",
+                    "Golden Trophy",
+                    "Minimalist Player",
+                    "Football Poster",
+                    "Matchday Theme",
+                  ].map((name, i) => (
+                    <button
+                      type="button"
+                      className="chip"
+                      key={name}
+                      onClick={() => applyFootballPreset(name, i)}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+                {footballEffects && (
+                  <>
+                    {(["lighting", "smoke", "glow"] as const).map((key) => (
+                      <label className="field mt-3" key={key}>
+                        {key}
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step=".01"
+                          value={footballEffects[key]}
+                          onChange={(e) =>
+                            setFootballEffects({
+                              ...footballEffects,
+                              [key]: +e.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    ))}
+                    <button
+                      className="chip mt-3"
+                      onClick={() => setFootballEffects(undefined)}
+                    >
+                      Remove football effects
+                    </button>
+                  </>
+                )}
+              </section>
+            )}
             <h2>Framing & layout</h2>
+            <button
+              type="button"
+              className="chip mb-4"
+              disabled={!upload || faceBusy}
+              onClick={fitDetectedFace}
+            >
+              {faceBusy
+                ? "Analyzing faces…"
+                : "Fit detected face · protect clock area"}
+            </button>
+            {faceStatus && (
+              <p role="status" className="muted text-xs mb-4">
+                {faceStatus}
+              </p>
+            )}
+            <label className="flex gap-2 mb-3">
+              <input
+                type="checkbox"
+                checked={outpaint}
+                disabled={!outpaintAvailable && !outpaint}
+                onChange={(e) => setOutpaint(e.target.checked)}
+              />{" "}
+              AI background expansion
+            </label>
+            <p className="muted text-xs mb-4">
+              {outpaintAvailable
+                ? "Optional paid AI generation runs when you create the wallpaper; the preview shows framing only."
+                : "Requires OUTPAINT_PROVIDER=replicate and your server-side Replicate token. Manual crop and backgrounds remain available."}
+            </p>
+            {outpaint && (
+              <label className="field mb-4">
+                Scene expansion instructions
+                <textarea
+                  value={outpaintPrompt}
+                  maxLength={500}
+                  onChange={(e) => setOutpaintPrompt(e.target.value)}
+                />
+              </label>
+            )}
+            <button
+              className={"chip mb-4 " + (smartCrop ? "active" : "")}
+              onClick={() => {
+                setSmartCrop(!smartCrop);
+                setZoom(1);
+              }}
+            >
+              Smart subject crop
+            </button>
+            <label className="field mb-4">
+              Image zoom
+              <input
+                type="range"
+                min="1"
+                max="4"
+                step=".01"
+                value={zoom}
+                onChange={(e) => setZoom(+e.target.value)}
+              />
+            </label>
+            {[
+              ["Exposure", exposure, setExposure, -2, 2],
+              ["Highlights", highlights, setHighlights, -0.5, 0.5],
+              ["Color temperature", temperature, setTemperature, -1, 1],
+              ["Clarity", clarity, setClarity, 0, 1],
+            ].map(([label, value, set, min, max]) => (
+              <label key={String(label)} className="field mb-4">
+                {String(label)}
+                <input
+                  type="range"
+                  min={Number(min)}
+                  max={Number(max)}
+                  step=".01"
+                  value={Number(value)}
+                  onChange={(e) =>
+                    (set as (v: number) => void)(+e.target.value)
+                  }
+                />
+              </label>
+            ))}
+            {upload && (
+              <p className="text-xs muted mb-4">
+                {upload.width} × {upload.height} source ·{" "}
+                {assessment.needsUpscale
+                  ? `${assessment.scale.toFixed(1)}× enlargement needed`
+                  : "Native detail available"}
+                {assessment.veryLow
+                  ? " · Low-resolution source: results cannot recover all missing detail."
+                  : ""}
+              </p>
+            )}
             <label className="field mb-4">
               Photo layout
               <select
@@ -1221,6 +1957,188 @@ export function Studio() {
             </label>
           </div>
           <div className="studio-edit-section">
+            <h2>Layers</h2>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {textLayers.map((t, i) => (
+                <button
+                  key={i}
+                  className={"chip " + (selectedText === i ? "active" : "")}
+                  onClick={() => {
+                    setSelectedText(i);
+                    setSelectedShape("");
+                  }}
+                >
+                  Text {i + 1}: {t.content.slice(0, 16) || "Empty"}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2 mb-5">
+              <button
+                className="chip"
+                disabled={textLayers.length >= 8}
+                onClick={() => {
+                  setTextLayers([
+                    ...textLayers,
+                    { ...emptyText, content: "Your text" },
+                  ]);
+                  setSelectedText(textLayers.length);
+                }}
+              >
+                Add text layer
+              </button>
+              <button
+                className="chip"
+                disabled={textLayers.length >= 8}
+                onClick={() => {
+                  setTextLayers([
+                    ...textLayers,
+                    {
+                      ...text,
+                      x: Math.min(1, text.x + 0.05),
+                      y: Math.min(1, text.y + 0.05),
+                    },
+                  ]);
+                  setSelectedText(textLayers.length);
+                }}
+              >
+                Duplicate text
+              </button>
+              <button
+                className="chip"
+                onClick={() => {
+                  setTextLayers(
+                    textLayers.length > 1
+                      ? textLayers.filter((_, i) => i !== selectedText)
+                      : [{ ...emptyText }],
+                  );
+                  setSelectedText(0);
+                }}
+              >
+                Delete text layer
+              </button>
+            </div>
+            <h2>Shapes & stickers</h2>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {(["rectangle", "ellipse", "star", "heart"] as const).map(
+                (kind) => (
+                  <button
+                    key={kind}
+                    className="chip"
+                    disabled={shapes.length >= 12}
+                    onClick={() => {
+                      const shape: EditorShape = {
+                        id: crypto.randomUUID(),
+                        kind,
+                        x: 0.5,
+                        y: 0.5,
+                        width: 0.2,
+                        height: 0.2,
+                        color: "#5eead4",
+                        opacity: 0.8,
+                        rotation: 0,
+                      };
+                      setShapes([...shapes, shape]);
+                      setSelectedShape(shape.id);
+                    }}
+                  >
+                    Add {kind}
+                  </button>
+                ),
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {shapes.map((s) => (
+                <button
+                  key={s.id}
+                  className={"chip " + (selectedShape === s.id ? "active" : "")}
+                  onClick={() => setSelectedShape(s.id)}
+                >
+                  {s.kind}
+                </button>
+              ))}
+            </div>
+            {shapes
+              .filter((s) => s.id === selectedShape)
+              .map((shape) => (
+                <div key={shape.id} className="space-y-3 mb-5">
+                  <label className="field">
+                    Shape color
+                    <input
+                      type="color"
+                      value={shape.color}
+                      onChange={(e) =>
+                        setShapes(
+                          shapes.map((s) =>
+                            s.id === shape.id
+                              ? { ...s, color: e.target.value }
+                              : s,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    Shape opacity
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step=".01"
+                      value={shape.opacity}
+                      onChange={(e) =>
+                        setShapes(
+                          shapes.map((s) =>
+                            s.id === shape.id
+                              ? { ...s, opacity: +e.target.value }
+                              : s,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    Shape rotation
+                    <input
+                      type="range"
+                      min="-180"
+                      max="180"
+                      value={shape.rotation}
+                      onChange={(e) =>
+                        setShapes(
+                          shapes.map((s) =>
+                            s.id === shape.id
+                              ? { ...s, rotation: +e.target.value }
+                              : s,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <button
+                    className="chip"
+                    disabled={shapes.length >= 12}
+                    onClick={() => {
+                      const copy = {
+                        ...shape,
+                        id: crypto.randomUUID(),
+                        x: Math.min(1, shape.x + 0.05),
+                      };
+                      setShapes([...shapes, copy]);
+                      setSelectedShape(copy.id);
+                    }}
+                  >
+                    Duplicate shape
+                  </button>
+                  <button
+                    className="chip"
+                    onClick={() =>
+                      setShapes(shapes.filter((s) => s.id !== shape.id))
+                    }
+                  >
+                    Delete shape
+                  </button>
+                </div>
+              ))}
             <h2>Make a statement</h2>
             <p className="text-xs muted mb-4">
               Drag text on the preview to move it. Drag its corner to resize.
@@ -1251,6 +2169,7 @@ export function Studio() {
             <label className="field mb-4">
               Wallpaper text
               <textarea
+                aria-label="Wallpaper text"
                 rows={3}
                 maxLength={400}
                 value={text.content}
@@ -1318,6 +2237,64 @@ export function Studio() {
                 <option value="right">Right</option>
               </select>
             </label>
+            <div className="space-y-3 mb-4">
+              {[
+                ["Text rotation", "rotation", -180, 180, 1],
+                ["Text opacity", "opacity", 0, 1, 0.01],
+                ["Letter spacing", "spacing", -0.02, 0.1, 0.001],
+                ["Text outline", "outline", 0, 0.02, 0.001],
+              ].map(([label, key, min, max, step]) => (
+                <label key={String(key)} className="field">
+                  {String(label)}
+                  <input
+                    type="range"
+                    min={Number(min)}
+                    max={Number(max)}
+                    step={Number(step)}
+                    value={Number(
+                      text[key as keyof EditorText] ??
+                        (key === "opacity" ? 1 : 0),
+                    )}
+                    onChange={(e) =>
+                      setText({ ...text, [String(key)]: +e.target.value })
+                    }
+                  />
+                </label>
+              ))}
+              <label className="field">
+                Outline color
+                <input
+                  type="color"
+                  value={text.outlineColor || "#000000"}
+                  onChange={(e) =>
+                    setText({ ...text, outlineColor: e.target.value })
+                  }
+                />
+              </label>
+              <label className="flex gap-2 items-center">
+                <input
+                  type="checkbox"
+                  checked={!!text.gradient}
+                  onChange={(e) =>
+                    setText({
+                      ...text,
+                      gradient: e.target.checked ? "#5eead4" : undefined,
+                    })
+                  }
+                />
+                Text gradient
+              </label>
+              {text.gradient && (
+                <input
+                  aria-label="Text gradient end color"
+                  type="color"
+                  value={text.gradient}
+                  onChange={(e) =>
+                    setText({ ...text, gradient: e.target.value })
+                  }
+                />
+              )}
+            </div>
             <label className="flex gap-2 items-center">
               <input
                 type="checkbox"

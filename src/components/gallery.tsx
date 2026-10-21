@@ -51,6 +51,7 @@ export function Gallery({
   initialCategory?: string;
   compact?: boolean;
 }) {
+  const [kind, setKind] = useState("");
   const [phonePreview, setPhonePreview] = useState<Wallpaper | null>(null);
   const [query, setQuery] = useState(""),
     [category, setCategory] = useState(initialCategory),
@@ -72,6 +73,7 @@ export function Gallery({
     [retry, setRetry] = useState(0);
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
+    if (p.get("q")) setQuery(p.get("q")!);
     if (p.get("category")) setCategory(p.get("category")!);
     if (p.get("orientation")) setOrientation(p.get("orientation")!);
   }, []);
@@ -84,6 +86,7 @@ export function Gallery({
       try {
         const p = new URLSearchParams({
           q: query,
+          kind,
           category,
           orientation,
           color,
@@ -108,7 +111,17 @@ export function Gallery({
       clearTimeout(t);
       c.abort();
     };
-  }, [query, category, orientation, color, resolution, sort, page, retry]);
+  }, [
+    query,
+    category,
+    orientation,
+    color,
+    resolution,
+    sort,
+    page,
+    retry,
+    kind,
+  ]);
   useEffect(() => {
     if (!data.refreshing) return;
     const timer = setTimeout(() => setRetry((n) => n + 1), 8000);
@@ -116,6 +129,7 @@ export function Gallery({
   }, [data]);
   function reset() {
     setQuery("");
+    setKind("");
     setCategory("");
     setColor("");
     setOrientation("");
@@ -321,6 +335,35 @@ export function Gallery({
           </button>
         ))}
       </div>
+      <div className="flex gap-2 my-4">
+        <button
+          className={"chip " + (!kind ? "active" : "")}
+          onClick={() => {
+            setKind("");
+            setPage(1);
+          }}
+        >
+          All source types
+        </button>
+        <button
+          className={"chip " + (kind === "native" ? "active" : "")}
+          onClick={() => {
+            setKind("native");
+            setPage(1);
+          }}
+        >
+          Native 4K
+        </button>
+        <button
+          className={"chip " + (kind === "ai" ? "active" : "")}
+          onClick={() => {
+            setKind("ai");
+            setPage(1);
+          }}
+        >
+          AI-enhanced 4K
+        </button>
+      </div>
       <div className="collection-meta">
         <div>
           <h2>
@@ -436,8 +479,8 @@ export function Gallery({
                     height={i % 3 === 1 ? 1000 : 740}
                   />
                   <span className="wall-quality">
-                    {w.width >= 3840 ? "4K" : "HD"}
-                    <span> {w.width >= 3840 ? "ULTRA HD" : "ORIGINAL"}</span>
+                    {Math.max(w.width,w.height)>=3840 && Math.min(w.width,w.height)>=2160 ? "4K" : "HD"}
+                    <span> {Math.max(w.width,w.height)>=3840 && Math.min(w.width,w.height)>=2160 ? "ULTRA HD" : "ORIGINAL"}</span>
                   </span>
                   <span className="wall-open">
                     <ArrowUpRight size={18} />

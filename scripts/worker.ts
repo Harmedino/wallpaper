@@ -1,9 +1,11 @@
+import { ensureWeeklyImport, processImportStep } from "../src/lib/ingestion";
 import "dotenv/config";
-import { db, database, mongo } from "../src/lib/db";
+import { db, database, mongo, ensureIndexes } from "../src/lib/db";
 import { remove } from "../src/lib/storage";
 import { processNextJob } from "../src/lib/processing";
 import { runScheduledDiscovery } from "../src/lib/discovery-scheduler";
 
+await ensureIndexes();
 let stopping = false;
 process.on("SIGTERM", () => {
   stopping = true;
@@ -15,6 +17,8 @@ let maintenance = 0;
 while (!stopping) {
   try {
     await processNextJob();
+    if (process.env.INGESTION_WORKER_ENABLED !== "false")
+      await processImportStep();
     if (Date.now() - maintenance > 60000) {
       maintenance = Date.now();
       await database
@@ -39,7 +43,10 @@ while (!stopping) {
         await db.job.deleteMany({ where: { uploadId: u.id } });
         await db.upload.delete({ where: { id: u.id } });
       }
-      await runScheduledDiscovery();
+      if (process.env.INGESTION_WORKER_ENABLED !== "false") {
+        await ensureWeeklyImport();
+        await runScheduledDiscovery();
+      }
     }
   } catch (e) {
     console.error("Worker:", e instanceof Error ? e.message : e);

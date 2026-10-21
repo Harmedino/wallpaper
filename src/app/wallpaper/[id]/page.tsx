@@ -1,3 +1,5 @@
+import { DevicePreview } from "@/components/device-preview";
+import { WallpaperActions } from "@/components/wallpaper-actions";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -27,6 +29,15 @@ export default async function Detail({
   const { id } = await params;
   const w = await db.wallpaper.findUnique({ where: { id, published: true } });
   if (!w) notFound();
+  const native4K =
+    Math.min(w.width, w.height) >= 2160 && Math.max(w.width, w.height) >= 3840;
+  const qualityClass = native4K
+    ? /^AI-enhanced/i.test(w.aiStatus || "")
+      ? "AI-Upscaled 4K"
+      : "Native 4K"
+    : Math.min(w.width, w.height) >= 1080
+      ? "Standard HD"
+      : "Lower Resolution";
   const related = await db.wallpaper.findMany({
     where: { category: w.category, published: true, id: { not: id } },
     take: 3,
@@ -66,6 +77,40 @@ export default async function Detail({
               {w.aiStatus}
             </div>
           </div>
+          <div className="panel mt-5 text-sm">
+            <strong>{qualityClass}</strong>
+            <p className="muted text-xs mt-2">
+              Actual source: {w.width} × {w.height} pixels ·{" "}
+              {w.format || "Format verified when the original is loaded"} ·{" "}
+              {w.verifiedAt
+                ? "Original file verified"
+                : "Source metadata; original verification pending"}
+            </p>
+            {w.quality && (
+              <p className="muted text-xs mt-2">
+                Detail score: {w.quality.detailScore} · Heuristic analysis;
+                sharpness cannot be guaranteed.
+              </p>
+            )}
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {w.tags?.map((tag: string) => (
+              <Link
+                key={tag}
+                className="chip"
+                href={`/explore?q=${encodeURIComponent(tag)}`}
+              >
+                {tag}
+              </Link>
+            ))}
+          </div>
+          <p className="text-xs muted mt-4">
+            {w.width >= w.height ? "Landscape" : "Portrait"} ·{" "}
+            {native4K
+              ? "High resolution source — native pixels"
+              : "Original resolution source; 4K exports may require enlargement"}{" "}
+            · {w.downloads} downloads
+          </p>
           <div className="panel mt-6">
             <h2 className="text-lg">The story & the credit</h2>
             <p className="text-sm muted">
@@ -90,7 +135,11 @@ export default async function Detail({
           </div>
         </div>
         <div>
+          <div className="panel mb-5">
+            <DevicePreview wallpaper={{ id, title: w.title }} />
+          </div>
           <DownloadPanel id={id} />
+          <WallpaperActions id={id} title={w.title} />
           <p className="text-xs muted leading-6 mt-5 px-2">
             Respect the creator. Keep attribution with your download and follow
             the linked license when sharing or adapting this image.

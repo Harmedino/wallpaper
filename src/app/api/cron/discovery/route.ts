@@ -1,3 +1,8 @@
+import {
+  ensureWeeklyImport,
+  processImportStep,
+  importStatistics,
+} from "@/lib/ingestion";
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { database, mongo } from "@/lib/db";
@@ -40,10 +45,15 @@ export async function GET(req: Request) {
         },
         { upsert: true },
       );
+    await ensureWeeklyImport();
+    const until = Date.now() + 180000;
+    for (let i = 0; i < 8 && Date.now() < until; i++)
+      if (!(await processImportStep())) break;
     const runs = await runScheduledDiscovery();
     return NextResponse.json({
       ok: true,
       runs,
+      imports: await importStatistics(),
       message:
         "Discovery completed. Eligible Commons originals publish automatically; unclear rights remain unpublished.",
     });

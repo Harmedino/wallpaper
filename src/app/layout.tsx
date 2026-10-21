@@ -38,6 +38,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               >
                 <Sparkles size={14} /> AI Studio
               </Link>
+              <Link href="/smart-fit" className="hide-mobile">
+                Smart Fit
+              </Link>
+              <Link href="/football-creator" className="hide-mobile">
+                Football
+              </Link>
             </nav>
             <Link
               href="/uploads"
@@ -67,6 +73,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Link href="/terms">Terms</Link>
               <Link href="/copyright">Copyright & removal</Link>
               <Link href="/admin">Admin</Link>
+              <Link href="/smart-fit" className="hide-mobile">
+                Smart Fit
+              </Link>
+              <Link href="/football-creator" className="hide-mobile">
+                Football
+              </Link>
             </nav>
             <p className="muted text-xs">
               Curated with care. Download with credit.

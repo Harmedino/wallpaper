@@ -1,3 +1,6 @@
+import { imageQuality } from "./quality";
+import { database } from "./db";
+import { perceptualHash } from "./image-fingerprint";
 import sharp from "sharp";
 import { get, put } from "./storage";
 import { remote, permittedUrl } from "./network";
@@ -10,7 +13,9 @@ export async function wallpaperMedia(
   if (!w.remoteUrl) return get(thumbnail ? w.thumbKey : w.originalKey);
   const key = thumbnail ? w.thumbKey : w.originalKey;
   try {
-    return await get(key);
+    const cached = await get(key);
+    if (!thumbnail && !w.verifiedAt) await verifyRecord(w, cached);
+    return cached;
   } catch {}
   const url = thumbnail ? w.remoteThumbnailUrl : w.remoteUrl;
   if (
@@ -42,5 +47,28 @@ export async function wallpaperMedia(
         .toBuffer()
     : clean.bytes;
   await put(key, bytes);
+  if (!thumbnail) await verifyRecord(w, bytes);
   return bytes;
+}
+
+async function verifyRecord(w: Record<string, any>, bytes: Buffer) {
+  const image = await validateImage(bytes);
+  const quality = await imageQuality(image.bytes);
+  await database.collection("wallpapers").updateOne(
+    { id: w.id },
+    {
+      $set: {
+        verifiedAt: new Date(),
+        verificationStatus: "file-verified",
+        actualHash: image.hash,
+        perceptualHash: await perceptualHash(image.bytes),
+        fileSize: bytes.length,
+        width: image.width,
+        height: image.height,
+        originalFormat: "webp",
+        color: quality.color,
+        quality,
+      },
+    },
+  );
 }
