@@ -1,0 +1,28 @@
+export const categories = [
+  "Nature and landscapes",
+  "Mountains and forests",
+  "Ocean and beaches",
+  "Space and galaxies",
+  "Cars and motorcycles",
+  "Architecture",
+  "Cities and skylines",
+  "Animals",
+  "Abstract",
+  "Minimalist",
+  "Dark and AMOLED",
+  "Technology",
+  "Gaming",
+  "Fantasy and digital art",
+  "Anime-style art",
+  "Sports",
+];
+export const resolutions = [
+  { label: "Full HD · Desktop", width: 1920, height: 1080 },
+  { label: "QHD · Desktop", width: 2560, height: 1440 },
+  { label: "4K UHD · Desktop", width: 3840, height: 2160 },
+  { label: "5K · Desktop", width: 5120, height: 2880 },
+  { label: "Ultrawide", width: 3440, height: 1440 },
+  { label: "Phone · Full HD", width: 1080, height: 1920 },
+  { label: "Phone · QHD", width: 1440, height: 2560 },
+  { label: "Phone · 4K", width: 2160, height: 3840 },
+];

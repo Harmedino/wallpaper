@@ -1,0 +1,45 @@
+services:
+  mongo:
+    image: mongo:8.0.17
+    volumes:
+      - mongo:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  app:
+    build: .
+    env_file: .env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/wallpaper
+      NODE_ENV: production
+      STORAGE_DIR: /app/.data/media
+    command: sh -c "npm run db:setup && npm start"
+    ports:
+      - "3000:3000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - media:/app/.data/media
+    restart: unless-stopped
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/wallpaper
+      NODE_ENV: production
+      STORAGE_DIR: /app/.data/media
+    command: npm run worker
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - media:/app/.data/media
+    restart: unless-stopped
+volumes:
+  mongo:
+  media:
