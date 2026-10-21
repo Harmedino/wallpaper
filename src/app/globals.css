@@ -1515,3 +1515,16 @@ header {
   src: url("/fonts/Caveat%5Bwght%5D.ttf") format("truetype");
   font-display: swap;
 }
+
+.wall-thumbnail-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #13251d;
+  color: #b9dace;
+  font-size: 12px;
+  pointer-events: none;
+}

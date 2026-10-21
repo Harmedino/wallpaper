@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { WallpaperThumbnail } from "./wallpaper-thumbnail";
 import { PhonePreview } from "./phone-preview";
 import {
   ArrowUpRight,
@@ -428,11 +429,10 @@ export function Gallery({
             <div className="wall-card" key={w.id}>
               <Link href={`/wallpaper/${w.id}`} className="block">
                 <div className="wall-visual">
-                  <img
-                    src={`/api/wallpapers/${w.id}/thumbnail`}
-                    alt={w.title}
-                    loading={i < 3 ? "eager" : "lazy"}
-                    width={1100}
+                  <WallpaperThumbnail
+                    id={w.id}
+                    title={w.title}
+                    eager={i < 3}
                     height={i % 3 === 1 ? 1000 : 740}
                   />
                   <span className="wall-quality">

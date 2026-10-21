@@ -358,3 +358,42 @@ test("real on-device cutout removes background and photographic replacements exp
   expect(Math.abs(pixel[1] - 136)).toBeLessThan(12);
   expect(Math.abs(pixel[2] - 204)).toBeLessThan(12);
 });
+
+test("thumbnail failures show loading and retry automatically", async ({
+  page,
+}) => {
+  let target = "";
+  let failed = false;
+  await page.route("**/api/wallpapers/*/thumbnail*", async (route) => {
+    const url = new URL(route.request().url());
+    if (!failed) {
+      failed = true;
+      target = url.pathname;
+      await route.fulfill({ status: 503, body: "Unavailable" });
+      return;
+    }
+    if (url.pathname === target) {
+      await route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: await sharp({
+          create: {
+            width: 400,
+            height: 300,
+            channels: 3,
+            background: "#334455",
+          },
+        })
+          .png()
+          .toBuffer(),
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.goto("/explore");
+  await expect.poll(() => failed).toBeTruthy();
+  const image = page.locator(`img[src*="${target}"]`);
+  await expect(image).toHaveAttribute("src", /retry=1/, { timeout: 15000 });
+  await expect(image).toHaveCSS("opacity", "1");
+});
