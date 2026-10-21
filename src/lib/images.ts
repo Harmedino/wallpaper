@@ -234,7 +234,9 @@ export async function render(
               await createBackground(o.backgroundTemplate, o.width, o.height),
             )
         : o.backgroundMode === "blur"
-          ? sharp(original).resize(o.width, o.height, { fit: "cover" }).blur(30)
+          ? sharp(original)
+              .resize(o.width, o.height, { fit: "cover" })
+              .blur(Math.max(0.3, (30 * Math.min(o.width, o.height)) / 2160))
           : sharp({
               create: {
                 width: o.width,

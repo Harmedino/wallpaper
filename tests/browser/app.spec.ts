@@ -18,13 +18,17 @@ test("gallery search, details and real downloaded file", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Aurora silk", exact: true }),
   ).toBeVisible();
-  await page.getByLabel("Choose your resolution").selectOption("0");
+  await page
+    .getByLabel("Your device", { exact: true })
+    .selectOption("resolution-0");
   const downloadPromise = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "Download wallpaper", exact: true })
     .click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("wallspace-1920x1080.jpg");
+  expect(download.suggestedFilename()).toBe(
+    "wallspace-aurora-silk-1920x1080.jpg",
+  );
   const path = await download.path();
   const m = await sharp(path!).metadata();
   expect(m.width).toBe(1920);
@@ -51,9 +55,11 @@ test("Studio uploads, creates and downloads a real private result", async ({
   await expect(
     page.getByRole("heading", { name: "Your new perspective is ready." }),
   ).toBeVisible({ timeout: 30000 });
-  await expect(page.getByText(/standard interpolation.*Cropped/)).toBeVisible();
+  await expect(page.getByText(/standard interpolation.*Fitted/)).toBeVisible();
   const promise = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Download finished wallpaper" }).click();
+  await page
+    .getByRole("button", { name: "Download finished wallpaper" })
+    .click();
   const dl = await promise;
   const m = await sharp((await dl.path())!).metadata();
   expect(m.width).toBe(1080);
@@ -128,7 +134,9 @@ test("Studio templates, text and framing export a real edited wallpaper without 
     page.getByRole("heading", { name: "Your new perspective is ready." }),
   ).toBeVisible({ timeout: 30000 });
   const promised = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Download finished wallpaper" }).click();
+  await page
+    .getByRole("button", { name: "Download finished wallpaper" })
+    .click();
   const dl = await promised;
   const meta = await sharp((await dl.path())!).metadata();
   expect(meta.width).toBe(1920);
@@ -241,7 +249,9 @@ test("mobile editor preserves photos, pins preview and supports text dragging an
     page.getByRole("heading", { name: "Your new perspective is ready." }),
   ).toBeVisible({ timeout: 30000 });
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Download finished wallpaper" }).click();
+  await page
+    .getByRole("button", { name: "Download finished wallpaper" })
+    .click();
   const download = await downloadPromise;
   const metadata = await sharp((await download.path())!).metadata();
   expect(metadata.width).toBe(3840);
@@ -384,7 +394,9 @@ test("real on-device cutout removes background and photographic replacements exp
     page.getByRole("heading", { name: "Your new perspective is ready." }),
   ).toBeVisible({ timeout: 30000 });
   const downloaded = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Download finished wallpaper" }).click();
+  await page
+    .getByRole("button", { name: "Download finished wallpaper" })
+    .click();
   const file = await downloaded;
   const pixel = await sharp((await file.path())!)
     .extract({ left: 1, top: 1, width: 1, height: 1 })

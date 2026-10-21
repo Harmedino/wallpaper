@@ -104,7 +104,7 @@ test("simple creator customizes a striped badge and downloads the actual wallpap
   await page
     .getByRole("button", { name: "Create wallpaper", exact: true })
     .click();
-  const link = page.getByRole("link", {
+  const link = page.getByRole("button", {
     name: "Download wallpaper ↓",
     exact: true,
   });
@@ -145,7 +145,7 @@ test("simple photo creator previews cinematic effects and exports full portrait 
   await page
     .getByRole("button", { name: "Create wallpaper", exact: true })
     .click();
-  const link = page.getByRole("link", {
+  const link = page.getByRole("button", {
     name: "Download wallpaper ↓",
     exact: true,
   });

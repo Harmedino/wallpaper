@@ -201,6 +201,12 @@ async function createIndexes() {
       },
       { unique: true },
     ),
+    database
+      .collection("fittedVariants")
+      .createIndex(
+        { wallpaperId: 1, sourceHash: 1, optionsHash: 1 },
+        { unique: true },
+      ),
     database.collection("projects").createIndex({ id: 1 }, { unique: true }),
     database.collection("projects").createIndex({ ownerId: 1, updatedAt: -1 }),
     database

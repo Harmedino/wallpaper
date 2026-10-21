@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { WallpaperCard } from "./wallpaper-card";
 import { WallpaperThumbnail } from "./wallpaper-thumbnail";
 import { compatibleDevices } from "@/lib/device-fit";
 import { PhonePreview } from "./phone-preview";
@@ -31,6 +32,7 @@ type Wallpaper = {
   downloads: number;
   color: string;
   aiStatus: string;
+  verifiedAt?: string;
 };
 const short: Record<string, string> = {
   "Nature and landscapes": "Nature",
@@ -470,75 +472,7 @@ export function Gallery({
       ) : (
         <div className={"wall-grid " + (dense ? "dense" : "")}>
           {data.items.slice(0, compact ? 6 : 18).map((w, i) => (
-            <div className="wall-card" key={w.id}>
-              <Link href={`/wallpaper/${w.id}`} className="block">
-                <div className="wall-visual">
-                  <WallpaperThumbnail
-                    id={w.id}
-                    title={w.title}
-                    eager={i < 3}
-                    height={i % 3 === 1 ? 1000 : 740}
-                  />
-                  <span className="wall-quality">
-                    {Math.max(w.width, w.height) >= 3840 &&
-                    Math.min(w.width, w.height) >= 2160
-                      ? "4K"
-                      : "HD"}
-                    <span>
-                      {" "}
-                      {Math.max(w.width, w.height) >= 3840 &&
-                      Math.min(w.width, w.height) >= 2160
-                        ? "ULTRA HD"
-                        : "ORIGINAL"}
-                    </span>
-                  </span>
-                  <span className="wall-open">
-                    <ArrowUpRight size={18} />
-                  </span>
-                  <span className="wall-download">
-                    <Download size={17} /> View & download
-                  </span>
-                </div>
-                <div className="wall-caption">
-                  <div>
-                    <h3>{w.title}</h3>
-                    <p>
-                      {short[w.category] || w.category} <span>·</span> {w.width}{" "}
-                      × {w.height}
-                    </p>
-                  </div>
-                  <span
-                    className="wall-color"
-                    style={{
-                      background:
-                        (
-                          {
-                            blue: "#7098c7",
-                            purple: "#a08dcc",
-                            green: "#6bbaa5",
-                            orange: "#dbb484",
-                            red: "#d58396",
-                          } as Record<string, string>
-                        )[w.color] || "#94a3b8",
-                    }}
-                    aria-label={`${w.color} palette`}
-                  />
-                </div>
-              </Link>
-              {compatibleDevices(w).length > 0 && (
-                <button
-                  className="wall-phone-preview"
-                  onClick={() => setPhonePreview(w)}
-                >
-                  <Smartphone size={14} /> Preview on{" "}
-                  {compatibleDevices(w).some((d) => d.group === "phone")
-                    ? "phone"
-                    : compatibleDevices(w)[0]?.group === "ipad"
-                      ? "iPad"
-                      : "desktop"}
-                </button>
-              )}
-            </div>
+            <WallpaperCard key={w.id} wallpaper={w} eager={i < 3} />
           ))}
         </div>
       )}

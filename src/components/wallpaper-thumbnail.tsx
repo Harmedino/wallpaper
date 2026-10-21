@@ -5,11 +5,13 @@ export function WallpaperThumbnail({
   title,
   eager,
   height,
+  width = 1100,
 }: {
   id: string;
   title: string;
   eager: boolean;
   height: number;
+  width?: number;
 }) {
   const [attempt, setAttempt] = useState(0),
     [loaded, setLoaded] = useState(false),
@@ -31,7 +33,7 @@ export function WallpaperThumbnail({
         src={`/api/wallpapers/${id}/thumbnail${attempt ? "?retry=" + attempt : ""}`}
         alt={title}
         loading={eager ? "eager" : "lazy"}
-        width={1100}
+        width={width}
         height={height}
         onLoad={() => {
           setLoaded(true);

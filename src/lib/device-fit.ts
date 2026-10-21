@@ -1,5 +1,29 @@
 export const devices = [
   {
+    id: "iphone",
+    group: "phone",
+    name: "iPhone 16 Pro",
+    width: 1206,
+    height: 2622,
+    os: "ios",
+  },
+  {
+    id: "iphone-max",
+    group: "phone",
+    name: "iPhone 16 Pro Max",
+    width: 1320,
+    height: 2868,
+    os: "ios",
+  },
+  {
+    id: "pixel",
+    group: "phone",
+    name: "Google Pixel 9 Pro",
+    width: 1280,
+    height: 2856,
+    os: "android",
+  },
+  {
     id: "android",
     group: "phone",
     name: "Samsung Galaxy S25 Ultra · One UI 7",

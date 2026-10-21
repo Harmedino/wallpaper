@@ -1,36 +1,83 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { database } from "@/lib/db";
 import { categories } from "@/lib/constants";
+import { WallpaperThumbnail } from "@/components/wallpaper-thumbnail";
+import { ensureStarterCatalog } from "@/lib/starter-catalog";
 export const metadata = { title: "Wallpaper categories" };
-export default function Page() {
+export const dynamic = "force-dynamic";
+export default async function Page() {
+  await ensureStarterCatalog();
+  const groups = await database
+    .collection("wallpapers")
+    .aggregate([
+      { $match: { published: true } },
+      {
+        $group: {
+          _id: "$category",
+          count: { $sum: 1 },
+          image: {
+            $first: {
+              id: "$id",
+              title: "$title",
+              width: "$width",
+              height: "$height",
+            },
+          },
+        },
+      },
+      { $sort: { count: -1 } },
+    ])
+    .toArray();
+  const upcoming = categories.filter((c) => !groups.some((g) => g._id === c));
   return (
-    <div className="shell pt-16">
-      <p className="eyebrow">A WORLD OF INSPIRATION</p>
+    <div className="shell category-page">
+      <p className="eyebrow">EXPLORE THE COLLECTION</p>
       <h1 className="page-title">Find your kind of beautiful.</h1>
-      <p className="muted mb-10">
-        Explore a mood, a place, a possibility. Categories grow as reviewed
-        images are added.
+      <p className="muted">
+        A place, a color, a feeling. Every collection starts with a different
+        perspective.
       </p>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {categories.map((c, i) => (
+      <div className="category-grid">
+        {groups.map((g) => (
           <Link
-            key={c}
-            href={"/explore?category=" + encodeURIComponent(c)}
-            className="panel min-h-44 flex flex-col justify-between hover:border-teal-300/40 transition"
-            style={{
-              background: `linear-gradient(140deg,hsl(${155 + i * 17} 30% 15%),#10151d)`,
-            }}
+            key={g._id}
+            href={`/explore?category=${encodeURIComponent(g._id)}`}
+            className="category-card"
           >
-            <span className="text-xs text-white/30">
-              {String(i + 1).padStart(2, "0")}
-            </span>
-            <h2 className="text-lg flex justify-between items-center mb-0">
-              {c}
-              <ArrowUpRight size={18} />
-            </h2>
+            <div className="category-image">
+              <WallpaperThumbnail
+                id={g.image.id}
+                title={g.image.title}
+                width={g.image.width}
+                height={g.image.height}
+                eager={false}
+              />
+            </div>
+            <div>
+              <h2>{g._id}</h2>
+              <p className="muted">{g.count} wallpapers</p>
+              <ArrowUpRight size={20} />
+            </div>
           </Link>
         ))}
       </div>
+      {upcoming.length > 0 && (
+        <details className="detail-provenance">
+          <summary>Collections still growing</summary>
+          <div className="flex flex-wrap gap-2 mt-5">
+            {upcoming.map((c) => (
+              <Link
+                className="chip"
+                key={c}
+                href={`/explore?category=${encodeURIComponent(c)}`}
+              >
+                {c}
+              </Link>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

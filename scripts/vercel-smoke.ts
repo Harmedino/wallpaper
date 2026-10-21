@@ -71,6 +71,29 @@ try {
     200,
     "starter image must exist in production storage, not only the database",
   );
+  // Public fitted variants must also persist in GridFS under a read-only deployment.
+  for (const fit of ["fit", "fill"]) {
+    const url = `${base}/api/wallpapers/${starter.id}/view?width=1080&height=1920&format=jpg&fit=${fit}&x=0&y=1`;
+    const output = await fetch(url);
+    assert.equal(
+      output.status,
+      200,
+      await output
+        .clone()
+        .text()
+        .then((t) => t.slice(0, 200)),
+    );
+    assert.match(output.headers.get("content-type")!, /image\/jpeg/);
+    assert.match(output.headers.get("content-disposition")!, /inline/);
+    const bytes = Buffer.from(await output.arrayBuffer());
+    const metadata = await sharp(bytes).metadata();
+    assert.equal(metadata.width, 1080);
+    assert.equal(metadata.height, 1920);
+    await sharp(bytes).stats();
+    const cached = await fetch(url);
+    assert.equal(cached.status, 200);
+    assert.deepEqual(Buffer.from(await cached.arrayBuffer()), bytes);
+  }
   const cap = await (await fetch(base + "/api/capabilities")).json();
   assert.equal(cap.limits.uploadMb, 4);
   const s = await fetch(base + "/api/session");
@@ -173,7 +196,7 @@ try {
     "sources are not due before Monday",
   );
   console.log(
-    "PASS: real HTTP upload/private download with Vercel runtime flags and read-only application storage, 4 MB limit, post-response conversion without a worker, all favicon assets, and authenticated cron endpoint.",
+    "PASS: real HTTP upload/private download with Vercel runtime flags and read-only application storage, 4 MB limit, post-response conversion without a worker, public Fit/Fill variants and cache, all favicon assets, and authenticated cron endpoint.",
   );
 } finally {
   if (uploadId)

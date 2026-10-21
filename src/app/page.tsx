@@ -1,149 +1,267 @@
 import Link from "next/link";
 import {
+  Search,
   ArrowUpRight,
-  Sparkles,
   Monitor,
   Smartphone,
-  Check,
-  ArrowRight,
+  Sparkles,
 } from "lucide-react";
-import { Gallery } from "@/components/gallery";
-import { Button } from "@/components/ui/button";
-export const dynamic = "force-dynamic";
+import { database } from "@/lib/db";
 import { ensureStarterCatalog } from "@/lib/starter-catalog";
-import { db } from "@/lib/db";
+import {
+  WallpaperCard,
+  type WallpaperCardData,
+} from "@/components/wallpaper-card";
+export const dynamic = "force-dynamic";
+function card(w: any): WallpaperCardData {
+  return {
+    id: w.id,
+    title: w.title,
+    width: w.width,
+    height: w.height,
+    category: w.category,
+    aiStatus: w.aiStatus,
+    verifiedAt: w.verifiedAt ? String(w.verifiedAt) : null,
+  };
+}
 export default async function Home() {
   await ensureStarterCatalog();
-  const hero = await db.wallpaper.findMany({
-    where: { published: true, featured: true },
-    take: 1,
-  });
+  const rows = (where: any = {}, sort: any = { createdAt: -1 }, limit = 6) =>
+    database
+      .collection("wallpapers")
+      .find({ published: true, ...where })
+      .sort(sort)
+      .limit(limit)
+      .toArray();
+  const [
+    featured,
+    trending,
+    latest,
+    football,
+    phones,
+    desktops,
+    total,
+    categories,
+  ] = await Promise.all([
+    rows({ remoteUrl: { $exists: true } }, { featured: -1, downloads: -1 }, 4),
+    rows({}, { downloads: -1, createdAt: -1 }),
+    rows(),
+    rows({ category: "Football" }),
+    rows({ $expr: { $gt: ["$height", "$width"] } }),
+    rows({ $expr: { $gte: ["$width", "$height"] } }),
+    database.collection("wallpapers").countDocuments({ published: true }),
+    database
+      .collection("wallpapers")
+      .aggregate([
+        { $match: { published: true } },
+        {
+          $group: {
+            _id: "$category",
+            count: { $sum: 1 },
+            image: {
+              $first: {
+                id: "$id",
+                title: "$title",
+                width: "$width",
+                height: "$height",
+              },
+            },
+          },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 6 },
+      ])
+      .toArray(),
+  ]);
+  const hero = featured[0] || latest[0];
+  const sections = [
+    {
+      title: "Featured perspectives",
+      description: "A few good places to start.",
+      items: featured.length ? featured : latest,
+      href: "/explore?featured=1",
+    },
+    {
+      title: "Trending wallpapers",
+      description: "Most downloaded by the community.",
+      items: trending,
+      href: "/trending",
+    },
+    {
+      title: "Latest additions",
+      description: "Fresh images for a fresh start.",
+      items: latest,
+      href: "/latest",
+    },
+    {
+      title: "For your phone",
+      description: "Portrait originals, ready to fit your device.",
+      items: phones,
+      href: "/explore?orientation=portrait",
+    },
+    {
+      title: "For your desktop",
+      description: "Room to breathe on a bigger screen.",
+      items: desktops,
+      href: "/explore?orientation=landscape",
+    },
+    {
+      title: "Football collection",
+      description:
+        "Stadiums, matchday scenes and approved football photography.",
+      items: football,
+      href: "/explore?category=Football",
+    },
+  ];
   return (
-    <>
-      <div className="shell pt-8">
-        <section className="relative overflow-hidden rounded-3xl min-h-135 flex items-center bg-[#10283c] fade-in">
-          {hero[0] && (
-            <img
-              src={`/api/wallpapers/${hero[0].id}/thumbnail`}
-              alt="Original aurora-inspired abstract waves"
-              className="absolute inset-0 w-full h-full object-cover"
+    <div className="shell home-page">
+      <section className="home-hero">
+        <div className="home-hero-copy">
+          <p className="eyebrow">A LITTLE INSPIRATION, EVERY DAY</p>
+          <h1>
+            Your screen.
+            <br />
+            <span>A better view.</span>
+          </h1>
+          <p className="home-lede">
+            Find something you love. Fit it to your screen. Save the real image,
+            ready to make it yours.
+          </p>
+          <form action="/explore" className="home-search">
+            <Search size={21} />
+            <input
+              aria-label="Search the wallpaper collection"
+              name="q"
+              placeholder="Mountains, midnight, matchday…"
             />
-          )}
-          <div className="absolute inset-0 bg-linear-to-r from-[#06141d]/95 via-[#071621]/60 to-transparent" />
-          <div className="relative z-10 p-8 md:p-16 max-w-2xl">
-            <p className="eyebrow flex items-center gap-2 mb-7">
-              <span className="w-1.5 h-1.5 bg-teal-300 rounded-full" /> A NEW
-              PERSPECTIVE, EVERY DAY
-            </p>
-            <h1 className="text-5xl md:text-7xl leading-[1.03] tracking-[-.06em] font-medium mb-6">
-              Your screen.
-              <br />
-              Your state of{" "}
-              <span className="text-teal-200 italic font-serif">mind.</span>
-            </h1>
-            <p className="text-slate-300 text-sm leading-7 max-w-sm mb-8">
-              Extraordinary wallpapers for your everyday spaces. Discover your
-              next view, or create something entirely your own.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Button asChild>
-                <Link href="/explore">
-                  Find your wallpaper <ArrowUpRight size={16} />
-                </Link>
-              </Button>
-              <Button variant="outline" asChild>
-                <Link href="/studio">
-                  <Sparkles size={15} /> Open AI Studio
-                </Link>
-              </Button>
-            </div>
-            <div className="flex gap-5 mt-10 text-[10px] text-slate-400">
-              <span className="flex gap-1.5 items-center">
-                <Check size={12} className="text-teal-300" /> Real 4K downloads
-              </span>
-              <span className="flex gap-1.5 items-center">
-                <Check size={12} className="text-teal-300" /> Responsible
-                sourcing
-              </span>
-              <span className="flex gap-1.5 items-center">
-                <Check size={12} className="text-teal-300" /> Made for every
-                screen
-              </span>
-            </div>
-          </div>
-          <span className="absolute bottom-6 right-7 text-[10px] text-white/40 hide-mobile">
-            {hero[0]?.title.toUpperCase()} — ORIGINAL PROCEDURAL ART
-          </span>
-        </section>
-        <div className="flex flex-wrap justify-between py-8 border-b border-white/8 mb-14 gap-5 text-xs text-slate-500">
-          <span>LESS NOISE. MORE INSPIRATION.</span>
-          <div className="flex gap-6">
-            <Link
-              href="/explore?orientation=landscape"
-              className="flex gap-2 items-center"
-            >
-              <Monitor size={14} />
-              Desktop & laptop
+            <button type="submit">Search</button>
+          </form>
+          <div className="home-links">
+            <Link href="/explore">
+              Find your wallpaper <ArrowUpRight size={16} />
             </Link>
-            <Link
-              href="/explore?orientation=portrait"
-              className="flex gap-2 items-center"
-            >
-              <Smartphone size={14} />
-              Phone & tablet
+            <Link href="/studio">
+              <Sparkles size={16} />
+              Create your own
             </Link>
-            <span className="hide-mobile">JPG · PNG · WebP</span>
           </div>
+          <p className="home-count">
+            {total.toLocaleString()} wallpapers in the collection · JPG, PNG &
+            WebP
+          </p>
         </div>
-        <Gallery compact />
-        <section className="my-16 rounded-3xl border border-teal-200/15 bg-linear-to-br from-teal-900/20 to-indigo-900/10 p-8 md:p-12 flex flex-wrap items-center justify-between gap-8">
-          <div>
-            <p className="eyebrow mb-3">YOUR IMAGE. A BIGGER POSSIBILITY.</p>
-            <h2 className="text-3xl md:text-4xl font-medium tracking-tight mb-4">
-              Make it unmistakably yours.
-            </h2>
-            <p className="muted text-sm max-w-md leading-6">
-              Bring your own photo. Find the perfect crop. Refine its colors.
-              Create a wallpaper made for your screen, privately.
-            </p>
-            <Button asChild className="mt-3">
-              <Link href="/studio">
-                <Sparkles size={16} /> Try Wallpaper Studio{" "}
-                <ArrowRight size={16} />
-              </Link>
-            </Button>
-          </div>
-          <div className="flex gap-3 items-end" aria-hidden="true">
-            <div className="w-48 h-30 rounded-xl border-4 border-slate-600 bg-linear-to-br from-teal-300 via-teal-900 to-indigo-900 shadow-2xl" />
-            <div className="w-16 h-32 rounded-xl border-4 border-slate-600 bg-linear-to-br from-teal-300 via-teal-900 to-indigo-900" />
-          </div>
-        </section>
-        <section className="grid md:grid-cols-3 gap-8 mb-10">
-          {[
-            [
-              "01",
-              "Choose a perspective",
-              "Browse original artwork and administrator-reviewed, openly licensed photography.",
-            ],
-            [
-              "02",
-              "Make it fit",
-              "Download a real file in the resolution and format that works for your device.",
-            ],
-            [
-              "03",
-              "Give credit",
-              "Creator, license and modification information stay accessible with every wallpaper.",
-            ],
-          ].map(([n, t, d]) => (
-            <div key={n}>
-              <span className="text-teal-300 text-xs">{n} /</span>
-              <h3 className="mt-4 mb-3 text-lg">{t}</h3>
-              <p className="muted text-sm leading-6">{d}</p>
+        <div className="home-hero-art">
+          {hero ? (
+            <Link href={`/wallpaper/${hero.id}`}>
+              <img
+                src={`/api/wallpapers/${hero.id}/thumbnail`}
+                width={hero.width}
+                height={hero.height}
+                alt={hero.title}
+                fetchPriority="high"
+              />
+              <div className="home-image-credit">
+                <span>
+                  {hero.title
+                    .replace(/\.(jpe?g|png|webp)$/i, "")
+                    .replace(/_/g, " ")}
+                </span>
+                <ArrowUpRight size={18} />
+              </div>
+            </Link>
+          ) : (
+            <div className="panel">
+              The collection is being prepared. Explore your own photos in the
+              Studio.
             </div>
-          ))}
-        </section>
+          )}
+        </div>
+      </section>
+      <div className="home-device-links">
+        <Link href="/explore?orientation=portrait">
+          <Smartphone size={19} />
+          <span>
+            Phone wallpapers<small>iPhone, Samsung, Pixel & custom sizes</small>
+          </span>
+          <ArrowUpRight size={17} />
+        </Link>
+        <Link href="/explore?orientation=landscape">
+          <Monitor size={19} />
+          <span>
+            Desktop wallpapers<small>Full HD, QHD, 4K, 5K & ultrawide</small>
+          </span>
+          <ArrowUpRight size={17} />
+        </Link>
+        <Link href="/studio">
+          <Sparkles size={19} />
+          <span>
+            Wallpaper Studio
+            <small>Upload, fit and personalize your photo</small>
+          </span>
+          <ArrowUpRight size={17} />
+        </Link>
       </div>
-    </>
+      <section className="home-section">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">FIND YOUR MOOD</p>
+            <h2>Popular categories</h2>
+          </div>
+          <Link href="/categories">All categories →</Link>
+        </div>
+        <div className="home-categories">
+          {categories.map((c) => (
+            <Link
+              key={c._id}
+              href={`/explore?category=${encodeURIComponent(c._id)}`}
+            >
+              <span>{c._id.replace(" and ", " & ")}</span>
+              <small>{c.count} wallpapers</small>
+              <ArrowUpRight size={16} />
+            </Link>
+          ))}
+        </div>
+      </section>
+      {sections.map((section, index) => (
+        <section className="home-section" key={section.title}>
+          <div className="section-heading">
+            <div>
+              <h2>{section.title}</h2>
+              <p className="muted">{section.description}</p>
+            </div>
+            <Link href={section.href}>View collection →</Link>
+          </div>
+          {section.items.length ? (
+            <div className="wall-grid">
+              {section.items.map((w, i) => (
+                <WallpaperCard
+                  key={w.id}
+                  wallpaper={card(w)}
+                  eager={index === 0 && i < 2}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="collection-empty-small">
+              <p>New images are reviewed before joining this collection.</p>
+              <Link href={section.href}>Explore the collection →</Link>
+            </div>
+          )}
+        </section>
+      ))}
+      <section className="home-studio">
+        <div>
+          <p className="eyebrow">MAKE IT PERSONAL</p>
+          <h2>Your photo deserves a place on your screen.</h2>
+          <p className="muted">
+            Keep the whole image, choose your crop, add a few words, and export
+            at the right size.
+          </p>
+        </div>
+        <Link className="save-primary" href="/studio">
+          Open Wallpaper Studio <ArrowUpRight size={18} />
+        </Link>
+      </section>
+    </div>
   );
 }

@@ -1,4 +1,6 @@
 "use client";
+import { ImageSaveActions } from "@/components/image-save-actions";
+import { imageFilename } from "@/lib/wallpaper-fit";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -56,7 +58,7 @@ export default function Page() {
               <img
                 src={`/api/uploads/${u.id}/image`}
                 alt="Your private upload"
-                className="w-full h-48 object-cover rounded-xl mb-4"
+                className="w-full h-48 object-contain rounded-xl mb-4"
               />
               <p className="text-[10px] muted break-all select-all">
                 Upload ID: {u.id}
@@ -76,13 +78,19 @@ export default function Page() {
                     {j.status} · {j.progress}% · {j.aiStatus}
                   </p>
                   {j.status === "completed" && (
-                    <a
-                      className="text-teal-200"
-                      href={`/api/jobs/${j.id}/result?download=1`}
-                    >
-                      Download {j.options.width} × {j.options.height}{" "}
-                      {j.options.format.toUpperCase()} →
-                    </a>
+                    <ImageSaveActions
+                      compact
+                      src={`/api/jobs/${j.id}/result?download=1`}
+                      viewUrl={`/api/jobs/${j.id}/result`}
+                      filename={imageFilename(
+                        "my-wallpaper",
+                        j.options.width,
+                        j.options.height,
+                        j.options.format,
+                      )}
+                      width={j.options.width}
+                      height={j.options.height}
+                    />
                   )}
                 </div>
               ))}

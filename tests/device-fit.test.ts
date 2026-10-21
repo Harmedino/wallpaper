@@ -8,7 +8,7 @@ test("only devices with matching aspect ratio can preview a wallpaper", () => {
   );
   assert.deepEqual(
     compatibleDevices({ width: 1440, height: 3120 }).map((d) => d.id),
-    ["android"],
+    ["iphone-max", "android"],
   );
   assert.deepEqual(
     compatibleDevices({ width: 2732, height: 2048 }).map((d) => d.id),
@@ -25,8 +25,10 @@ test("only devices with matching aspect ratio can preview a wallpaper", () => {
 });
 test("matching is based on shape rather than source resolution", () => {
   assert.equal(
-    compatibleDevices({ width: 1080, height: 2340 })[0]?.id,
-    "android",
+    compatibleDevices({ width: 1080, height: 2340 }).some(
+      (d) => d.id === "android",
+    ),
+    true,
   );
   assert.equal(
     compatibleDevices({ width: 1920, height: 1080 })[0]?.id,

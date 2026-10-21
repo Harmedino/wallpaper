@@ -1,3 +1,5 @@
+import { fittedWallpaper } from "@/lib/fitted-wallpaper";
+import { fitRequestSchema, imageFilename } from "@/lib/wallpaper-fit";
 import { gallerySearch, semanticFilter } from "@/lib/search";
 import {
   createImportRun,
@@ -198,9 +200,15 @@ async function handle(
             { width: { $gte: 3840 }, height: { $gte: 2160 } },
             { width: { $gte: 2160 }, height: { $gte: 3840 } },
           ];
+        if (url.searchParams.get("kind") === "native")
+          where.verifiedAt = { $exists: true };
         if (category) where.category = category;
         if (color) where.color = color;
-        if (resolution === "4k") where.width = { $gte: 3840 };
+        if (resolution === "4k")
+          where.$or = [
+            { width: { $gte: 3840 }, height: { $gte: 2160 } },
+            { width: { $gte: 2160 }, height: { $gte: 3840 } },
+          ];
         if (url.searchParams.get("featured")) where.featured = true;
         if (orientation)
           where.$expr =
@@ -282,70 +290,65 @@ async function handle(
             "Content-Disposition": 'attachment; filename="attribution.txt"',
           },
         });
-      if (action === "download") {
-        const owner = await session(true);
-        await rateLimit(`download:${owner!.id}`, 60);
-        await rateLimit("downloads:global", 1000);
-        const options = optionsSchema.parse({
+      if (["download", "view", "preview"].includes(action)) {
+        if (action !== "preview") {
+          const owner = await session(true);
+          await rateLimit(`download:${owner!.id}`, 60);
+          await rateLimit("downloads:global", 1000);
+        }
+        const options = fitRequestSchema.parse({
           width: Number(url.searchParams.get("width") || 3840),
           height: Number(url.searchParams.get("height") || 2160),
+          format: url.searchParams.get("format") || "jpg",
+          fit: url.searchParams.get("fit") || "fill",
           x: Number(url.searchParams.get("x") || 0.5),
           y: Number(url.searchParams.get("y") || 0.5),
-          format: url.searchParams.get("format") || "jpg",
+          zoom: Number(url.searchParams.get("zoom") || 1),
         });
-        let variant = await db.cropVariant.findUnique({
-          where: {
-            wallpaperId: id,
-            width: options.width,
-            height: options.height,
-            format: options.format,
-            cropX: options.x,
-            cropY: options.y,
-            sourceHash: w.hash,
-          },
-        });
-        let bytes: Buffer;
-        if (variant) bytes = await get(variant.key);
-        else {
-          bytes = await render(await wallpaperMedia(w), options);
-          const key = `variants/${id}/${options.width}x${options.height}-${options.x}-${options.y}-${w.hash.slice(0, 12)}.${options.format}`;
-          await put(
-            key,
-            bytes,
-            `image/${options.format === "jpg" ? "jpeg" : options.format}`,
+        if (
+          options.width * options.height >
+          (await limits()).outputMegapixels * 1000000
+        )
+          throw new HttpError(
+            400,
+            "Choose a resolution within the configured output pixel limit.",
           );
-          try {
-            await db.cropVariant.create({
-              data: {
-                wallpaperId: id,
-                width: options.width,
-                height: options.height,
-                format: options.format,
-                cropX: options.x,
-                cropY: options.y,
-                sourceHash: w.hash,
-                key,
-              },
-            });
-          } catch {}
+        const output = await fittedWallpaper(w, options, action === "preview");
+        if (action === "download") {
+          await db.wallpaper.update({
+            where: { id },
+            data: { downloads: { increment: 1 } },
+          });
+          await db.download.create({
+            data: {
+              wallpaperId: id,
+              width: options.width,
+              height: options.height,
+              format: options.format,
+            },
+          });
         }
-        await db.wallpaper.update({
-          where: { id },
-          data: { downloads: { increment: 1 } },
-        });
-        await db.download.create({
-          data: {
-            wallpaperId: id,
-            width: options.width,
-            height: options.height,
-            format: options.format,
-          },
-        });
+        const filename = imageFilename(
+          w.title,
+          output.width,
+          output.height,
+          output.format,
+        );
         return image(
-          bytes,
-          `image/${options.format === "jpg" ? "jpeg" : options.format}`,
-          `wallpaper-${id}.${options.format}`,
+          output.bytes,
+          `image/${output.format === "jpg" ? "jpeg" : output.format}`,
+          action === "download" ? filename : undefined,
           {
+            "Cache-Control": "private, no-store",
+            "X-Image-Width": String(output.width),
+            "X-Image-Height": String(output.height),
+            "X-Source-Width": String(output.sourceWidth),
+            "X-Source-Height": String(output.sourceHeight),
+            "X-Image-Processing": output.processing,
+            "X-Content-Type-Options": "nosniff",
+            ...(action !== "download"
+              ? { "Content-Disposition": `inline; filename="${filename}"` }
+              : {}),
             Link: `</api/wallpapers/${id}/attribution>; rel="license"`,
             "X-Wallpaper-License": w.license,
           },
@@ -1090,6 +1093,14 @@ async function handle(
         {
           error:
             "The collection is temporarily unavailable. Please try again shortly.",
+        },
+        503,
+      );
+    if ((e as any)?.code === "ENOENT" || (e as any)?.name === "NoSuchKey")
+      return json(
+        {
+          error:
+            "The image file is unavailable. Try another wallpaper or contact the site owner.",
         },
         503,
       );

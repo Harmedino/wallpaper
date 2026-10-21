@@ -1,4 +1,6 @@
 "use client";
+import { ImageSaveActions } from "./image-save-actions";
+import { imageFilename } from "@/lib/wallpaper-fit";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlignLeft, AlignCenter, AlignRight } from "lucide-react";
@@ -109,7 +111,7 @@ export function QuickCreator({ mode = "studio" }: { mode?: Mode }) {
     number,
     ...target,
   };
-  const [photoStyle, setPhotoStyle] = useState(1),
+  const [photoStyle, setPhotoStyle] = useState(mode === "smart-fit" ? 0 : 1),
     [photoPreview, setPhotoPreview] = useState(""),
     [previewBusy, setPreviewBusy] = useState(false);
   const photoStyles = [
@@ -124,13 +126,19 @@ export function QuickCreator({ mode = "studio" }: { mode?: Mode }) {
   const hasSubject = !!photo?.cutout && !keepOriginal;
   const photoId =
     keepOriginal && photo?.originalId ? photo.originalId : photo?.id;
+  const [photoFit, setPhotoFit] = useState(
+      mode === "smart-fit" ? "fill" : "fit",
+    ),
+    [cropX, setCropX] = useState(0.5),
+    [cropY, setCropY] = useState(0.5);
   const photoOptions = {
     ...target,
     format: "png",
     ai: false,
-    backgroundMode: hasSubject ? "art" : "blur",
+    backgroundMode: photoFit === "fill" ? "crop" : hasSubject ? "art" : "blur",
     backgroundTemplate: "stadium",
-    y: hasSubject ? 0.8 : 0.5,
+    x: photoFit === "fill" ? cropX : 0.5,
+    y: photoFit === "fill" ? cropY : hasSubject ? 0.8 : 0.5,
     brightness: photoStyle ? 1 + 0.04 * intensity : 1,
     contrast: photoStyle ? 1 + 0.08 * intensity : 1,
     saturation: photoStyle ? 1 + 0.1 * intensity : 1,
@@ -241,6 +249,8 @@ export function QuickCreator({ mode = "studio" }: { mode?: Mode }) {
       const r = await fetch("/api/uploads", { method: "POST", body: form });
       const d = await r.json();
       if (!r.ok) throw Error(d.error);
+      setCropX(0.5);
+      setCropY(0.5);
       setPhotoPreview("");
       const originalUrl = `/api/uploads/${d.id}/image`;
       setPhoto({ ...d, url: originalUrl, originalId: d.id, originalUrl });
@@ -249,8 +259,8 @@ export function QuickCreator({ mode = "studio" }: { mode?: Mode }) {
       try {
         setBusy("Finding the best composition…");
         const { detectFaces } = await import("@/lib/face-fit");
-        const faces = await detectFaces(file);
-        if (faces.length) {
+        const faces = mode === "smart-fit" ? [] : await detectFaces(file);
+        if (faces.length && mode !== "smart-fit") {
           const { cutout } = await import("@/lib/cutout");
           const subject = await cutout(file, setBusy);
           setBusy("Building your cinematic wallpaper…");
@@ -417,7 +427,9 @@ export function QuickCreator({ mode = "studio" }: { mode?: Mode }) {
             {usePhoto
               ? hasSubject
                 ? "Subject fitted automatically · cinematic background"
-                : "Automatically styled · full photo preserved"
+                : photoFit === "fill"
+                  ? "Normal crop · preview matches export"
+                  : "Automatically styled · full photo preserved"
               : "Original customizable design"}
           </p>
           {image &&
@@ -520,6 +532,54 @@ export function QuickCreator({ mode = "studio" }: { mode?: Mode }) {
           <h2 className="mt-8">2. A little touch</h2>
           {usePhoto && photo && (
             <div className="quick-touches">
+              <label className="field mb-4">
+                Photo fitting
+                <select
+                  aria-label="Photo fitting"
+                  value={photoFit}
+                  onChange={(e) => {
+                    setPhotoFit(e.target.value);
+                    setResult("");
+                  }}
+                >
+                  <option value="fill">Normal crop · fill screen</option>
+                  <option value="fit">Keep entire image</option>
+                </select>
+              </label>
+              {photoFit === "fill" && (
+                <div className="crop-controls mb-4">
+                  <label className="field">
+                    Horizontal crop
+                    <input
+                      aria-label="Photo horizontal crop"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step=".01"
+                      value={cropX}
+                      onChange={(e) => {
+                        setCropX(+e.target.value);
+                        setResult("");
+                      }}
+                    />
+                  </label>
+                  <label className="field">
+                    Vertical crop
+                    <input
+                      aria-label="Photo vertical crop"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step=".01"
+                      value={cropY}
+                      onChange={(e) => {
+                        setCropY(+e.target.value);
+                        setResult("");
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
               <p className="text-sm text-teal-200 mb-4">
                 Your look is applied automatically. Tweak it only if you want.
               </p>
@@ -784,13 +844,21 @@ export function QuickCreator({ mode = "studio" }: { mode?: Mode }) {
             </p>
           )}
           {result && (
-            <a
-              className="quick-download inline-block text-center"
-              href={result}
-              download
-            >
-              Download wallpaper ↓
-            </a>
+            <ImageSaveActions
+              key={result}
+              src={result}
+              viewUrl={result.replace("?download=1", "")}
+              filename={imageFilename(
+                usePhoto ? "my-photo" : name,
+                target.width,
+                target.height,
+                "png",
+              )}
+              width={target.width}
+              height={target.height}
+              autoPrepare
+              downloadLabel="Download wallpaper ↓"
+            />
           )}
           {error && (
             <p role="alert" className="error mt-4">

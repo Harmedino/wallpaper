@@ -36,12 +36,14 @@ type Props = {
   onDeviceChange?: (width: number, height: number) => void;
   showDownload?: boolean;
   initialDevice?: string;
+  embedded?: boolean;
 };
 export function DevicePreview({
   wallpaper,
   onDeviceChange,
   showDownload = true,
   initialDevice = "android",
+  embedded = false,
 }: Props) {
   const [deviceId, setDeviceId] = useState(initialDevice),
     [mode, setMode] = useState("lock"),
@@ -51,7 +53,20 @@ export function DevicePreview({
   const [clock, setClock] = useState("9:41"),
     [date, setDate] = useState("Wednesday, October 21");
   const frame = useRef<HTMLDivElement>(null);
-  const fitting = compatibleDevices(wallpaper);
+  const matches = compatibleDevices(wallpaper);
+  const fitting =
+    matches.length || !embedded
+      ? matches
+      : [
+          {
+            id: "custom",
+            group: wallpaper.width < wallpaper.height ? "phone" : "desktop",
+            name: "Custom screen",
+            width: wallpaper.width,
+            height: wallpaper.height,
+            os: wallpaper.width < wallpaper.height ? "android" : "windows",
+          },
+        ];
   const d = fitting.find((v) => v.id === deviceId) || fitting[0];
   useEffect(() => {
     const now = new Date();
@@ -101,11 +116,18 @@ export function DevicePreview({
     <div
       className={"device-preview " + (fullscreen ? "device-fullscreen" : "")}
     >
-      <h2 className="text-lg">Preview on your screen</h2>
+      {!embedded && <h2 className="text-lg">Preview on your screen</h2>}
       {d.os === "android" && (
-        <p className="one-ui-label">SAMSUNG GALAXY · ONE UI 7 PREVIEW</p>
+        <p className="one-ui-label">
+          {d.id === "android"
+            ? "SAMSUNG GALAXY · ONE UI 7 PREVIEW"
+            : "ANDROID PREVIEW"}
+        </p>
       )}
-      <div className="flex flex-wrap gap-2 justify-center my-4">
+      <div
+        hidden={embedded}
+        className="flex flex-wrap gap-2 justify-center my-4"
+      >
         {[
           ["phone", "Phone"],
           ["desktop", "Desktop"],
@@ -122,7 +144,7 @@ export function DevicePreview({
             </button>
           ))}
       </div>
-      <label className="field mb-3">
+      <label hidden={embedded} className="field mb-3">
         Device preset
         <select value={d.id} onChange={(e) => choose(e.target.value)}>
           {fitting
@@ -298,7 +320,7 @@ export function DevicePreview({
           </>
         )}
       </div>
-      <p className="text-xs text-teal-200 mt-4">
+      <p hidden={embedded} className="text-xs text-teal-200 mt-4">
         Full image visible · matching aspect ratio · no preview crop
       </p>
       <div className="flex flex-wrap justify-center gap-3 mt-3">

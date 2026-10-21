@@ -1,4 +1,6 @@
 "use client";
+import { ImageSaveActions } from "./image-save-actions";
+import { imageFilename } from "@/lib/wallpaper-fit";
 import { useEffect, useState, useRef } from "react";
 import {
   UploadCloud,
@@ -674,6 +676,18 @@ export function Studio({
           if (!r.ok) throw new Error(d.error);
           setUpload(d);
           setOriginalPhoto(d);
+          const qw = Number(p.get("width")),
+            qh = Number(p.get("height"));
+          if (qw >= 320 && qh >= 320 && qw * qh <= 16000000) {
+            setCustom(true);
+            setWidth(qw);
+            setHeight(qh);
+            setBackgroundMode(p.get("fit") === "fill" ? "crop" : "blur");
+            setPadding(0);
+            setX(Number(p.get("x") || 0.5));
+            setY(Number(p.get("y") || 0.5));
+            setSmartCrop(false);
+          }
           if (p.get("intent") === "text")
             setTextLayers([{ ...emptyText, content: "Your words here" }]);
           if (p.get("intent") === "enhance") setAi(true);
@@ -1282,7 +1296,7 @@ export function Studio({
               {job.status === "completed" && (
                 <>
                   <p className="notice text-xs mt-4">
-                    {job.aiStatus}. Cropped and encoded to your selected
+                    {job.aiStatus}. Fitted and encoded to your selected
                     dimensions.
                   </p>
                   <div
@@ -1340,12 +1354,23 @@ export function Studio({
                       Download required source attribution
                     </a>
                   )}
-                  <Button asChild className="w-full mt-5">
-                    <a href={`/api/jobs/${job.id}/result?download=1`}>
-                      <Download size={16} />
-                      Download finished wallpaper
-                    </a>
-                  </Button>
+                  <ImageSaveActions
+                    key={job.id}
+                    src={`/api/jobs/${job.id}/result?download=1`}
+                    viewUrl={`/api/jobs/${job.id}/result`}
+                    filename={imageFilename(
+                      "my-wallpaper",
+                      resultOptions.width,
+                      resultOptions.height,
+                      job.verifiedFormat === "jpeg"
+                        ? "jpg"
+                        : job.verifiedFormat || format,
+                    )}
+                    width={resultOptions.width}
+                    height={resultOptions.height}
+                    autoPrepare
+                    downloadLabel="Download finished wallpaper"
+                  />
                 </>
               )}
             </div>

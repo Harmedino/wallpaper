@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Aperture, ArrowUpRight, Sparkles } from "lucide-react";
@@ -13,7 +14,14 @@ export const metadata: Metadata = {
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var saved=localStorage.getItem('wallspace-theme');document.documentElement.dataset.theme=saved==='light'||saved==='dark'?saved:matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}catch{document.documentElement.dataset.theme='dark'}`,
+          }}
+        />
+      </head>
       <body>
         <header className="border-b border-white/8">
           <div className="shell flex h-22 items-center justify-between gap-4">
@@ -45,12 +53,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 Football
               </Link>
             </nav>
-            <Link
-              href="/uploads"
-              className="text-xs text-slate-400 hide-tablet"
-            >
-              My uploads <ArrowUpRight className="inline ml-1" size={14} />
-            </Link>
+            <div className="header-tools">
+              <ThemeToggle />
+              <Link
+                href="/uploads"
+                className="text-xs text-slate-400 hide-tablet"
+              >
+                My uploads <ArrowUpRight className="inline ml-1" size={14} />
+              </Link>
+            </div>
           </div>
         </header>
         <main>{children}</main>

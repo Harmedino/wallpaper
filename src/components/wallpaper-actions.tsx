@@ -7,11 +7,13 @@ export function WallpaperActions({
   title,
   width,
   height,
+  compact = false,
 }: {
   id: string;
   title: string;
   width: number;
   height: number;
+  compact?: boolean;
 }) {
   const fitting = compatibleDevices({ width, height });
   const [busy, setBusy] = useState(false),
@@ -43,57 +45,71 @@ export function WallpaperActions({
     }
   }
   return (
-    <div className="panel mt-5">
-      <h2 className="text-lg mb-4">Make it yours</h2>
+    <div className={compact ? "detail-social" : "panel mt-5"}>
+      {!compact && <h2 className="text-lg mb-4">Make it yours</h2>}
       <div className="flex flex-wrap gap-2">
-        <button
-          className="chip"
-          disabled={busy}
-          onClick={() => edit("smart-fit")}
-        >
-          Smart Fit
-        </button>
-        <button
-          className="chip"
-          disabled={busy}
-          onClick={() => edit("football")}
-        >
-          Football Creator
-        </button>
-        <button className="chip" disabled={busy} onClick={() => edit("edit")}>
-          Customize wallpaper
-        </button>
-        <button className="chip" disabled={busy} onClick={() => edit("text")}>
-          Add text
-        </button>
-        <button
-          className="chip"
-          disabled={busy}
-          onClick={() => edit("enhance")}
-        >
-          Enhance to 4K
-        </button>
-        {fitting.some((d) => d.group === "phone") && (
-          <button
-            className="chip"
-            onClick={() => {
-              setPreviewDevice("android");
-              setPreview(true);
-            }}
-          >
-            Preview on My Phone
-          </button>
-        )}
-        {fitting.some((d) => d.group === "desktop") && (
-          <button
-            className="chip"
-            onClick={() => {
-              setPreviewDevice(fitting.find((d) => d.group === "desktop")!.id);
-              setPreview(true);
-            }}
-          >
-            Preview on Desktop
-          </button>
+        {!compact && (
+          <>
+            <button
+              className="chip"
+              disabled={busy}
+              onClick={() => edit("smart-fit")}
+            >
+              Smart Fit
+            </button>
+            <button
+              className="chip"
+              disabled={busy}
+              onClick={() => edit("football")}
+            >
+              Football Creator
+            </button>
+            <button
+              className="chip"
+              disabled={busy}
+              onClick={() => edit("edit")}
+            >
+              Customize wallpaper
+            </button>
+            <button
+              className="chip"
+              disabled={busy}
+              onClick={() => edit("text")}
+            >
+              Add text
+            </button>
+            <button
+              className="chip"
+              disabled={busy}
+              onClick={() => edit("enhance")}
+            >
+              Enhance to 4K
+            </button>
+            {fitting.some((d) => d.group === "phone") && (
+              <button
+                className="chip"
+                onClick={() => {
+                  setPreviewDevice("android");
+                  setPreview(true);
+                }}
+              >
+                Preview on My Phone
+              </button>
+            )}
+            {fitting.some((d) => d.group === "desktop") && (
+              <button
+                className="chip"
+                onClick={() => {
+                  setPreviewDevice(
+                    fitting.find((d) => d.group === "desktop")!.id,
+                  );
+                  setPreview(true);
+                }}
+              >
+                Preview on Desktop
+              </button>
+            )}
+          </>
         )}
         <button
           className={"chip " + (favorite ? "active" : "")}
@@ -127,7 +143,7 @@ export function WallpaperActions({
             }
           }}
         >
-          Share
+          {compact ? "Share page" : "Share"}
         </button>
       </div>
       {busy && (
