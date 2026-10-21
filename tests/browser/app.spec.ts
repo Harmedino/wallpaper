@@ -79,3 +79,27 @@ test("mobile navigation and gallery fit the viewport", async ({ page }) => {
     ),
   ).toBe(true);
 });
+
+test("gallery failure has a retry action and recovers without showing a false empty count", async ({
+  page,
+}) => {
+  let fail = true;
+  await page.route("**/api/wallpapers?**", async (route) => {
+    if (fail)
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Database unavailable" }),
+      });
+    else await route.continue();
+  });
+  await page.goto("/explore");
+  await expect(
+    page.getByRole("heading", { name: "We couldn’t load the collection." }),
+  ).toBeVisible();
+  await expect(page.getByText("0 wallpapers", { exact: true })).toHaveCount(0);
+  fail = false;
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
+  await expect(page.locator(".wall-card").first()).toBeVisible();
+  await expect(page.locator(".collection").getByRole("alert")).toHaveCount(0);
+});

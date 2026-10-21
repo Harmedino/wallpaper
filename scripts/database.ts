@@ -4,6 +4,7 @@ await fs.mkdir(".data/mongo", { recursive: true });
 const server = await MongoMemoryServer.create({
   instance: {
     port: 27017,
+    launchTimeout: 60000,
     ip: "127.0.0.1",
     dbPath: ".data/mongo",
     storageEngine: "wiredTiger",

@@ -46,3 +46,13 @@ Saved `install_script` with the tested frozen dependency install and safe local 
 Configuration draft persistence was confirmed. It does not publish the environment. Review and save the configuration in environment settings, then publish when appropriate. Fresh-task snapshot restoration and production publication have not been independently verified. Git source publication is separate from cloud environment publication. See the repository history for source commits.
 
 See README.md for local/deployment commands, secure administrator bootstrap, required variable names and API-key setup guides. Credentials remain in ignored local files/environment configuration and are not included in this report.
+
+## Gallery UI revision
+
+Redesigned Explore, Trending and Latest with a larger editorial heading, forest-green palette, screen-type tabs, an original CSS Studio artwork panel, a simplified search/filter bar, shortened category labels, adjustable gallery density, larger image cards, separate captions, palette indicators and hover/focus download cues. Mobile uses a two-column masonry layout and reduced controls. Loading skeletons, genuine empty results and unavailable states have distinct presentations; service failures no longer display a misleading zero-wallpaper count or server-log instructions. Retry is functional. Reduced-motion preferences are respected.
+
+Investigating the supplied failure screenshot exposed a local startup/recovery issue: an initial MongoDB connection failure could leave later operations using a closed topology. Database operations now explicitly reconnect using the reused client, API connection failures return 503, and the worker can reconnect after startup failures. The local MongoDB launcher allows up to 60 seconds for recovery/startup. A regression script verifies an initial real connection failure followed by a successful operation after connectivity returns.
+
+The deployed Vercel API could not be inspected because outbound access to that hostname was denied in this environment. Its production database/storage configuration is not claimed fixed. README.md includes a Vercel checklist covering MongoDB, R2, a persistent worker and upload limits. No credentials were requested in chat or added to source code.
+
+Final UI revision checks passed: production build/type validation; all four Chromium tests (including unavailable-state retry); public/private HTTP smoke checks; administrator publication/rights checks; and the real database reconnection regression. The final browser run completed in 17.4 seconds. One earlier navigation timeout during concurrent checks passed in isolation and in the final full run. Desktop and mobile screenshots were visually inspected.

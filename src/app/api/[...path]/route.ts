@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { limits, limitSchema } from "@/lib/limits";
-import { db, database } from "@/lib/db";
+import { db, database, mongo } from "@/lib/db";
 import {
   admin,
   session,
@@ -51,6 +51,7 @@ async function handle(
     const url = new URL(req.url);
     const mutation = req.method !== "GET";
     if (mutation) originCheck(req);
+    await mongo.connect();
     if (mutation && area !== "uploads" && req.body) {
       const reader = req.body.getReader();
       const chunks: Uint8Array[] = [];
@@ -721,6 +722,19 @@ async function handle(
     }
     throw new HttpError(404, "Endpoint not found");
   } catch (e) {
+    if (
+      e instanceof Error &&
+      /^Mongo(?:ServerSelection|Network|NetworkTimeout|TopologyClosed|NotConnected|OperationTimeout)Error$/.test(
+        e.name,
+      )
+    )
+      return json(
+        {
+          error:
+            "The collection is temporarily unavailable. Please try again shortly.",
+        },
+        503,
+      );
     if (e instanceof HttpError) return json({ error: e.message }, e.status);
     if (e instanceof z.ZodError)
       return json({ error: e.issues.map((x) => x.message).join("; ") }, 400);

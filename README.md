@@ -93,3 +93,11 @@ Browser tests use `/usr/bin/chromium` by default; set CHROMIUM_PATH to another i
 ## Known limits
 
 Actual R2 and hosted/local Real-ESRGAN success need your configured services and credentials. Source availability and API terms can change; inspect Admin source errors and the verification report. There is no subject-segmentation model; crop positioning is manual. There is no AI tagging, optional account registration, perceptual deduplication, actual AI-cost metering. The storage dashboard counts real local/R2 objects and bytes. Administrators can lower safe limits and adjust retention/rate limits in the dashboard; the hard ceilings remain server-enforced. Copyright reports are stored for administrator review, not emailed automatically. Download attribution is supplied as a companion file and license header, not embedded in a bundled ZIP. Gallery search uses a MongoDB text index and an aggregation facet for paginated items/counts.
+
+## Vercel deployment checklist
+
+The web UI/API can run on Vercel, but the local database, local media directory and long-lived worker cannot be used there as production services. Configure `MONGODB_URI` to your reachable MongoDB Atlas/private MongoDB database, then run `npm run db:setup` against that database from a trusted machine. Set the HTTPS `APP_URL`, `SESSION_SECRET` and `ADMIN_PASSWORD_HASH` in Vercel environment settings. Configure private R2 storage and upload/seed media into the same production bucket; the cloud workspace's `.data` files are not deployed by Git. Run the worker on a persistent Node.js host using the same MongoDB and R2 settings.
+
+Vercel has request-body limits below this application's local 20 MB ceiling. Lower the administrator upload limit to 4 MB on Vercel, or add a separately hosted/direct-upload service before accepting larger uploads. Missing MongoDB configuration cannot be corrected by a UI redeployment alone. Check `/api/health` and deployment function logs without publishing credentials.
+
+The gallery now distinguishes loading, unavailable and genuinely empty results, and offers retry after a service interruption. `npm run test:db-recovery` tests recovery after an initial database connection failure; it requires local MongoDB on port 27017.

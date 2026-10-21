@@ -8,6 +8,14 @@ import {
   ArrowLeft,
   ArrowRight,
   Download,
+  Sparkles,
+  Monitor,
+  Smartphone,
+  LayoutGrid,
+  Grid2X2,
+  RefreshCw,
+  ImageOff,
+  X,
 } from "lucide-react";
 import { categories } from "@/lib/constants";
 import { Button } from "./ui/button";
@@ -21,6 +29,17 @@ type Wallpaper = {
   color: string;
   aiStatus: string;
 };
+const short: Record<string, string> = {
+  "Nature and landscapes": "Nature",
+  "Mountains and forests": "Mountains",
+  "Ocean and beaches": "Ocean",
+  "Space and galaxies": "Space",
+  "Cars and motorcycles": "Automotive",
+  "Cities and skylines": "Cities",
+  "Dark and AMOLED": "Dark",
+  "Fantasy and digital art": "Fantasy",
+  "Anime-style art": "Anime",
+};
 export function Gallery({
   mode = "explore",
   initialCategory = "",
@@ -30,21 +49,23 @@ export function Gallery({
   initialCategory?: string;
   compact?: boolean;
 }) {
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState(initialCategory);
-  const [orientation, setOrientation] = useState("");
-  const [color, setColor] = useState("");
-  const [resolution, setResolution] = useState("");
-  const [sort, setSort] = useState(mode === "trending" ? "popular" : "latest");
-  const [page, setPage] = useState(1);
-  const [data, setData] = useState<{
-    items: Wallpaper[];
-    total: number;
-    pages: number;
-  }>({ items: [], total: 0, pages: 0 });
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState(false);
+  const [query, setQuery] = useState(""),
+    [category, setCategory] = useState(initialCategory),
+    [orientation, setOrientation] = useState(""),
+    [color, setColor] = useState(""),
+    [resolution, setResolution] = useState(""),
+    [sort, setSort] = useState(mode === "trending" ? "popular" : "latest"),
+    [page, setPage] = useState(1),
+    [data, setData] = useState<{
+      items: Wallpaper[];
+      total: number;
+      pages: number;
+    }>({ items: [], total: 0, pages: 0 }),
+    [error, setError] = useState(""),
+    [loading, setLoading] = useState(true),
+    [filters, setFilters] = useState(false),
+    [dense, setDense] = useState(false),
+    [retry, setRetry] = useState(0);
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get("category")) setCategory(p.get("category")!);
@@ -70,8 +91,10 @@ export function Gallery({
         if (!r.ok) throw new Error(d.error);
         setData(d);
       } catch (e) {
-        if (!c.signal.aborted)
+        if (!c.signal.aborted) {
           setError(e instanceof Error ? e.message : "Gallery unavailable");
+          setData({ items: [], total: 0, pages: 0 });
+        }
       } finally {
         if (!c.signal.aborted) setLoading(false);
       }
@@ -80,86 +103,160 @@ export function Gallery({
       clearTimeout(t);
       c.abort();
     };
-  }, [query, category, orientation, color, resolution, sort, page]);
+  }, [query, category, orientation, color, resolution, sort, page, retry]);
+  function reset() {
+    setQuery("");
+    setCategory("");
+    setColor("");
+    setOrientation("");
+    setResolution("");
+    setPage(1);
+  }
+  function select(c: string) {
+    setCategory(c);
+    setPage(1);
+  }
+  const title = compact
+    ? "Find your next view"
+    : mode === "trending"
+      ? "Worth a second look"
+      : mode === "latest"
+        ? "Fresh perspectives"
+        : "Explore wallpapers";
   return (
-    <section className="fade-in">
-      <div className="flex flex-wrap items-end justify-between gap-5 mb-7">
-        <div>
-          <p className="eyebrow mb-3">THE COLLECTION</p>
-          <h2 className="text-3xl font-medium tracking-tight mb-2">
-            {compact
-              ? "Find your next view"
-              : mode === "trending"
-                ? "Worth a second look"
-                : mode === "latest"
-                  ? "Fresh perspectives"
-                  : "Explore wallpapers"}
-            <span className="text-teal-300">.</span>
-          </h2>
-          <p className="muted text-sm">
-            Original art. Thoughtfully sourced images. A screen that feels like
-            you.
-          </p>
-        </div>
-        {compact ? (
-          <Link href="/explore" className="text-sm flex items-center gap-2">
-            Explore collection <ArrowUpRight size={16} />
+    <section
+      className={"collection fade-in " + (compact ? "collection-compact" : "")}
+    >
+      {!compact ? (
+        <div className="collection-hero">
+          <div className="collection-intro">
+            <span className="collection-kicker">
+              <span /> A LITTLE ESCAPE, EVERY DAY
+            </span>
+            <h1>
+              {title}
+              <span>.</span>
+            </h1>
+            <p>
+              A new view can change everything.
+              <br />
+              Find a wallpaper that feels like <em>you.</em>
+            </p>
+            <div className="collection-device">
+              <button
+                className={!orientation ? "selected" : ""}
+                onClick={() => {
+                  setOrientation("");
+                  setPage(1);
+                }}
+              >
+                All screens
+              </button>
+              <button
+                className={orientation === "landscape" ? "selected" : ""}
+                onClick={() => {
+                  setOrientation("landscape");
+                  setPage(1);
+                }}
+              >
+                <Monitor size={14} />
+                Desktop
+              </button>
+              <button
+                className={orientation === "portrait" ? "selected" : ""}
+                onClick={() => {
+                  setOrientation("portrait");
+                  setPage(1);
+                }}
+              >
+                <Smartphone size={14} />
+                Phone
+              </button>
+            </div>
+          </div>
+          <Link href="/studio" className="studio-feature">
+            <div className="feature-orbit" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </div>
+            <span className="feature-badge">
+              <Sparkles size={12} /> WALLPAPER STUDIO
+            </span>
+            <div className="feature-copy">
+              <p>
+                Your photo.
+                <br /> A whole new possibility.
+              </p>
+              <span>
+                Create your own wallpaper <ArrowUpRight size={16} />
+              </span>
+            </div>
+            <span className="feature-open">
+              <ArrowUpRight size={20} />
+            </span>
           </Link>
-        ) : null}
-      </div>
-      <div className="flex flex-wrap gap-3 mb-5">
-        <div className="relative flex-1 min-w-52">
-          <Search
-            className="absolute left-4 top-3.5 text-slate-500"
-            size={18}
-          />
+        </div>
+      ) : (
+        <div className="flex justify-between items-end mb-8 gap-5">
+          <div>
+            <p className="eyebrow">THE COLLECTION</p>
+            <h2 className="text-4xl tracking-tight font-medium">
+              {title}
+              <span className="text-teal-300">.</span>
+            </h2>
+            <p className="muted text-sm mb-0">
+              A fresh perspective for your everyday.
+            </p>
+          </div>
+          <Link
+            className="text-sm text-teal-200 flex gap-2 items-center"
+            href="/explore"
+          >
+            View all <ArrowUpRight size={16} />
+          </Link>
+        </div>
+      )}
+      <div className="collection-toolbar">
+        <div className="collection-search">
+          <Search size={20} />
           <input
             aria-label="Search wallpapers"
-            placeholder="Search a mood, color, or place…"
-            className="w-full pl-12"
+            placeholder="What’s your next view? Search colors, moods, places…"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
               setPage(1);
             }}
           />
-        </div>
-        <select
-          aria-label="Sort wallpapers"
-          value={sort}
-          onChange={(e) => {
-            setSort(e.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="latest">Recently added</option>
-          <option value="popular">Most downloaded</option>
-        </select>
-        <Button
-          variant="outline"
-          onClick={() => setFilters(!filters)}
-          aria-expanded={filters}
-        >
-          <SlidersHorizontal size={15} />
-          Filters
-        </Button>
-      </div>
-      {filters && (
-        <div className="panel flex flex-wrap gap-4 mb-5">
-          <label className="field">
-            Orientation
-            <select
-              value={orientation}
-              onChange={(e) => {
-                setOrientation(e.target.value);
+          {query ? (
+            <button
+              aria-label="Clear search"
+              onClick={() => {
+                setQuery("");
                 setPage(1);
               }}
             >
-              <option value="">All orientations</option>
-              <option value="landscape">Desktop</option>
-              <option value="portrait">Phone</option>
-            </select>
-          </label>
+              <X size={16} />
+            </button>
+          ) : (
+            <kbd className="hide-mobile">SEARCH</kbd>
+          )}
+        </div>
+        <button
+          className={"filter-toggle " + (filters ? "selected" : "")}
+          aria-expanded={filters}
+          onClick={() => setFilters(!filters)}
+        >
+          <SlidersHorizontal size={16} />
+          Filters
+          {[color, resolution].filter(Boolean).length > 0 && (
+            <span className="filter-dot" />
+          )}
+        </button>
+      </div>
+      {filters && (
+        <div className="collection-filter-panel">
           <label className="field">
             Color
             <select
@@ -169,7 +266,7 @@ export function Gallery({
                 setPage(1);
               }}
             >
-              <option value="">All colors</option>
+              <option value="">Any palette</option>
               {["blue", "green", "orange", "purple", "red"].map((c) => (
                 <option key={c}>{c}</option>
               ))}
@@ -184,114 +281,201 @@ export function Gallery({
                 setPage(1);
               }}
             >
-              <option value="">All resolutions</option>
+              <option value="">Every resolution</option>
               <option value="4k">4K and above</option>
             </select>
           </label>
+          <button
+            className="text-xs text-teal-200 self-end py-3"
+            onClick={reset}
+          >
+            Reset filters
+          </button>
         </div>
       )}
-      <div className="flex gap-2 overflow-x-auto pb-5 mb-3">
+      <div className="category-strip">
         <button
-          className={"chip " + (!category ? "active" : "")}
-          onClick={() => {
-            setCategory("");
-            setPage(1);
-          }}
+          className={"category-tab " + (!category ? "active" : "")}
+          onClick={() => select("")}
         >
-          All wallpapers
+          Discover all
         </button>
         {categories.map((c) => (
           <button
             key={c}
-            className={"chip " + (category === c ? "active" : "")}
-            onClick={() => {
-              setCategory(c);
-              setPage(1);
-            }}
+            className={"category-tab " + (category === c ? "active" : "")}
+            onClick={() => select(c)}
+            aria-label={c}
           >
-            {c}
+            {short[c] || c}
           </button>
         ))}
       </div>
-      <div className="flex justify-between text-xs text-slate-500 mb-5">
-        <span>
-          {loading ? "Finding your inspiration…" : `${data.total} wallpapers`}
-        </span>
-        <span>Free to download · Attribution where required</span>
-      </div>
-      {error ? (
-        <div role="alert" className="error">
-          {error}
+      <div className="collection-meta">
+        <div>
+          <h2>
+            {category
+              ? short[category] || category
+              : query
+                ? "Your search results"
+                : mode === "trending"
+                  ? "Most loved"
+                  : "The latest perspectives"}
+          </h2>
+          <span>
+            {loading
+              ? "Finding something good…"
+              : error
+                ? "Collection unavailable"
+                : `${data.total} wallpapers to make your own`}
+          </span>
         </div>
-      ) : null}
-      {!loading && !data.items.length && !error ? (
-        <div className="panel text-center py-20">
-          <h3 className="text-xl">A little room for something new.</h3>
-          <p className="muted">
-            No wallpapers match these filters. Try another search or browse all
-            artwork.
-          </p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setCategory("");
-              setQuery("");
-              setColor("");
-              setOrientation("");
-              setResolution("");
+        <div className="collection-view">
+          <select
+            aria-label="Sort wallpapers"
+            value={sort}
+            onChange={(e) => {
+              setSort(e.target.value);
+              setPage(1);
             }}
           >
-            Clear filters
+            <option value="latest">Recently added</option>
+            <option value="popular">Most downloaded</option>
+          </select>
+          <div className="view-buttons hide-mobile">
+            <button
+              aria-label="Comfortable grid"
+              aria-pressed={!dense}
+              onClick={() => setDense(false)}
+            >
+              <Grid2X2 size={17} />
+            </button>
+            <button
+              aria-label="Compact grid"
+              aria-pressed={dense}
+              onClick={() => setDense(true)}
+            >
+              <LayoutGrid size={17} />
+            </button>
+          </div>
+        </div>
+      </div>
+      {loading ? (
+        <div
+          className={"wall-grid " + (dense ? "dense" : "")}
+          aria-label="Loading wallpapers"
+          aria-busy="true"
+        >
+          {Array.from({ length: 6 }, (_, i) => (
+            <div className="wall-skeleton" key={i}>
+              <div />
+              <span />
+              <span />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div role="alert" className="collection-state">
+          <span className="state-icon">
+            <ImageOff size={26} />
+          </span>
+          <p className="eyebrow">A MOMENT OUT OF FOCUS</p>
+          <h3>We couldn’t load the collection.</h3>
+          <p>
+            The gallery is temporarily unavailable. Try again in a moment,
+            <br className="hide-mobile" /> or bring your own image to the
+            Studio.
+          </p>
+          <div className="flex justify-center flex-wrap gap-3">
+            <Button onClick={() => setRetry(retry + 1)}>
+              <RefreshCw size={15} />
+              Try again
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/studio">
+                <Sparkles size={15} />
+                Open Studio
+              </Link>
+            </Button>
+          </div>
+        </div>
+      ) : !data.items.length ? (
+        <div className="collection-state">
+          <span className="state-icon">
+            <Search size={26} />
+          </span>
+          <h3>A new perspective is out there.</h3>
+          <p>
+            No wallpapers match these filters yet. Try a different mood or
+            explore the full collection.
+          </p>
+          <Button variant="outline" onClick={reset}>
+            Clear filters <ArrowRight size={15} />
           </Button>
         </div>
-      ) : null}
-      <div className="masonry" aria-busy={loading}>
-        {data.items.slice(0, compact ? 6 : 18).map((w, i) => (
-          <Link href={`/wallpaper/${w.id}`} className="wall-card" key={w.id}>
-            <img
-              alt={w.title}
-              src={`/api/wallpapers/${w.id}/thumbnail`}
-              loading={i < 3 ? "eager" : "lazy"}
-              width={1100}
-              height={i % 3 === 1 ? 1000 : i % 3 === 2 ? 680 : 820}
-              style={{
-                aspectRatio:
-                  i % 3 === 1 ? "1.1" : i % 3 === 2 ? "1.62" : "1.34",
-                objectFit: "cover",
-              }}
-            />
-            <div className="absolute top-4 left-4 rounded-full bg-black/30 border border-white/20 text-[10px] px-2.5 py-1 backdrop-blur-md">
-              {w.width >= 3840 ? "4K UHD" : "HD"}
-            </div>
-            <div className="card-overlay">
-              <div className="flex w-full justify-between items-end gap-2">
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-white/60 mb-2">
-                    {w.category}
-                  </p>
-                  <h3 className="text-lg font-medium mb-1">{w.title}</h3>
-                  <p className="text-xs text-white/50 mb-0">
-                    {w.width} × {w.height}
-                  </p>
-                </div>
-                <span className="bg-white/10 rounded-full p-2.5">
-                  <Download size={17} />
+      ) : (
+        <div className={"wall-grid " + (dense ? "dense" : "")}>
+          {data.items.slice(0, compact ? 6 : 18).map((w, i) => (
+            <Link className="wall-card" key={w.id} href={`/wallpaper/${w.id}`}>
+              <div className="wall-visual">
+                <img
+                  src={`/api/wallpapers/${w.id}/thumbnail`}
+                  alt={w.title}
+                  loading={i < 3 ? "eager" : "lazy"}
+                  width={1100}
+                  height={i % 3 === 1 ? 1000 : 740}
+                />
+                <span className="wall-quality">
+                  {w.width >= 3840 ? "4K" : "HD"}
+                  <span> {w.width >= 3840 ? "ULTRA HD" : "ORIGINAL"}</span>
+                </span>
+                <span className="wall-open">
+                  <ArrowUpRight size={18} />
+                </span>
+                <span className="wall-download">
+                  <Download size={17} /> View & download
                 </span>
               </div>
-            </div>
-          </Link>
-        ))}
-      </div>
-      {!compact && data.pages > 1 ? (
-        <div className="flex justify-center gap-4 mt-8">
+              <div className="wall-caption">
+                <div>
+                  <h3>{w.title}</h3>
+                  <p>
+                    {short[w.category] || w.category} <span>·</span> {w.width} ×{" "}
+                    {w.height}
+                  </p>
+                </div>
+                <span
+                  className="wall-color"
+                  style={{
+                    background:
+                      (
+                        {
+                          blue: "#7098c7",
+                          purple: "#a08dcc",
+                          green: "#6bbaa5",
+                          orange: "#dbb484",
+                          red: "#d58396",
+                        } as Record<string, string>
+                      )[w.color] || "#94a3b8",
+                  }}
+                  aria-label={`${w.color} palette`}
+                />
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+      {!loading && !error && data.pages > 1 && (
+        <div className="flex justify-center gap-4 mt-10">
           <Button
             variant="outline"
             disabled={page === 1}
             onClick={() => setPage(page - 1)}
           >
-            <ArrowLeft size={16} /> Previous
+            <ArrowLeft size={16} />
+            Previous
           </Button>
-          <span className="text-sm py-3">
+          <span className="text-xs py-3 muted">
             {page} / {data.pages}
           </span>
           <Button
@@ -299,10 +483,22 @@ export function Gallery({
             disabled={page >= data.pages}
             onClick={() => setPage(page + 1)}
           >
-            Next <ArrowRight size={16} />
+            Next
+            <ArrowRight size={16} />
           </Button>
         </div>
-      ) : null}
+      )}
+      {!compact && (
+        <div className="collection-bottom">
+          <span>
+            <span className="live-dot" /> Curated with care. Made for your
+            screen.
+          </span>
+          <Link href="/copyright">
+            Respect the art. Credit the creator. <ArrowUpRight size={13} />
+          </Link>
+        </div>
+      )}
     </section>
   );
 }

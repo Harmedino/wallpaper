@@ -14,6 +14,7 @@ process.on("SIGINT", () => {
 });
 let maintenance = 0;
 export async function tick() {
+  await mongo.connect();
   const claimed = await database.collection("jobs").findOneAndUpdate(
     {
       $or: [

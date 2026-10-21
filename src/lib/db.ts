@@ -7,7 +7,7 @@ export const mongo =
     process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/wallpaper",
     { serverSelectionTimeoutMS: 5000 },
   );
-if (process.env.NODE_ENV !== "production") globalDb.mongo = mongo;
+globalDb.mongo = mongo;
 export const database = mongo.db();
 export type Row = Document & { id: string };
 function filter(where: any = {}): any {
@@ -54,20 +54,24 @@ function model(name: string) {
   const c = database.collection<Row>(name);
   return {
     async create({ data }: any) {
+      await mongo.connect();
       const now = new Date();
       const row = { id: randomUUID(), createdAt: now, updatedAt: now, ...data };
       await c.insertOne(row);
       return row as Row;
     },
     async findUnique({ where }: any) {
+      await mongo.connect();
       return c.findOne(filter(where), { projection: { _id: 0 } });
     },
     async findUniqueOrThrow({ where }: any) {
+      await mongo.connect();
       const row = await c.findOne(filter(where), { projection: { _id: 0 } });
       if (!row) throw new Error("Record not found");
       return row;
     },
     async findMany({ where = {}, orderBy, take = 100, skip = 0 }: any = {}) {
+      await mongo.connect();
       let cursor = c.find(filter(where), { projection: { _id: 0 } });
       if (orderBy)
         cursor = cursor.sort(
@@ -78,9 +82,11 @@ function model(name: string) {
       return cursor.skip(skip).limit(take).toArray();
     },
     async count({ where = {} }: any = {}) {
+      await mongo.connect();
       return c.countDocuments(filter(where));
     },
     async update({ where, data }: any) {
+      await mongo.connect();
       const set: any = { updatedAt: new Date() },
         inc: any = {};
       for (const [k, v] of Object.entries(data)) {
@@ -97,6 +103,7 @@ function model(name: string) {
       return r;
     },
     async upsert({ where, create, update }: any) {
+      await mongo.connect();
       const inc: any = {},
         set: any = {};
       for (const [k, v] of Object.entries(update)) {
@@ -122,9 +129,11 @@ function model(name: string) {
       ) as Promise<Row>;
     },
     async delete({ where }: any) {
+      await mongo.connect();
       return c.deleteOne(filter(where));
     },
     async deleteMany({ where }: any) {
+      await mongo.connect();
       return c.deleteMany(filter(where));
     },
   };
@@ -143,6 +152,7 @@ export const db = {
   report: model("reports"),
 };
 export async function ensureIndexes() {
+  await mongo.connect();
   await Promise.all([
     database
       .collection("wallpapers")
