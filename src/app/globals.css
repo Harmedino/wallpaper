@@ -930,3 +930,71 @@ header {
     display: none;
   }
 }
+@font-face {
+  font-family: "Studio Sans";
+  src: url("/fonts/StudioSans.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Studio Serif";
+  src: url("/fonts/StudioSerif.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Studio Mono";
+  src: url("/fonts/StudioMono.ttf") format("truetype");
+  font-display: swap;
+}
+.studio-edit-section {
+  padding: 22px 0;
+  border-top: 1px solid #ffffff12;
+}
+.studio-edit-section h2 {
+  font-size: 16px;
+  letter-spacing: -0.025em;
+  margin-bottom: 16px;
+}
+.studio-look {
+  padding: 12px 8px;
+  border: 1px solid #ffffff12;
+  border-radius: 9px;
+  font-size: 11px;
+  background: #1b2625;
+  color: #b5c7bf;
+}
+.studio-look.active {
+  border-color: #91ddc3;
+  color: #bcebd9;
+  background: #294538;
+}
+.studio-template-strip {
+  margin-bottom: 22px;
+}
+.studio-template {
+  height: 70px;
+  border-radius: 10px;
+  display: flex;
+  align-items: end;
+  padding: 9px;
+  border: 1px solid #ffffff20;
+  transition: transform 0.2s;
+}
+.studio-template:hover {
+  transform: translateY(-3px);
+}
+.studio-template span {
+  font-size: 10px;
+  background: #0005;
+  border-radius: 4px;
+  color: white;
+  padding: 3px 5px;
+}
+.studio-canvas-column {
+  align-self: start;
+}
+@media (min-width: 901px) {
+  .studio-canvas-column:not(.has-result) {
+    position: sticky;
+    top: 16px;
+  }
+}

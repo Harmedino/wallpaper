@@ -32,7 +32,6 @@ test("Studio uploads, creates and downloads a real private result", async ({
   page,
 }) => {
   await page.goto("/studio");
-  await page.getByRole("checkbox", { name: /I own this image/ }).check();
   const bytes = await sharp({
     create: { width: 800, height: 600, channels: 3, background: "#345678" },
   })
@@ -41,9 +40,7 @@ test("Studio uploads, creates and downloads a real private result", async ({
   await page
     .getByLabel("Upload image")
     .setInputFiles({ name: "test.png", mimeType: "image/png", buffer: bytes });
-  await expect(
-    page.getByAltText("Your original with selected crop"),
-  ).toBeVisible();
+  await expect(page.getByAltText("Edited wallpaper preview")).toBeVisible();
   await page.getByLabel("Target screen").selectOption("5");
   await page.getByRole("button", { name: "Create my wallpaper" }).click();
   await expect(
@@ -102,4 +99,31 @@ test("gallery failure has a retry action and recovers without showing a false em
   await page.getByRole("button", { name: "Try again", exact: true }).click();
   await expect(page.locator(".wall-card").first()).toBeVisible();
   await expect(page.locator(".collection").getByRole("alert")).toHaveCount(0);
+});
+
+test("Studio templates, text and framing export a real edited wallpaper without confirmation", async ({
+  page,
+}) => {
+  await page.goto("/studio");
+  await expect(page.getByRole("checkbox", { name: /I own/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Sunset", exact: true }).click();
+  await expect(page.getByAltText("Edited wallpaper preview")).toBeVisible();
+  await page.getByRole("button", { name: "Noir", exact: true }).click();
+  await page.getByLabel("Wallpaper text").fill("STAY CURIOUS");
+  await page
+    .getByRole("combobox", { name: "Font", exact: true })
+    .selectOption("serif");
+  await page.getByLabel("Photo layout").selectOption("solid");
+  await page.getByLabel("Backdrop color", { exact: true }).fill("#123456");
+  await page.getByLabel("Target screen").selectOption("0");
+  await page.getByRole("button", { name: "Create my wallpaper" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your new perspective is ready." }),
+  ).toBeVisible({ timeout: 30000 });
+  const promised = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download finished wallpaper" }).click();
+  const dl = await promised;
+  const meta = await sharp((await dl.path())!).metadata();
+  expect(meta.width).toBe(1920);
+  expect(meta.height).toBe(1080);
 });

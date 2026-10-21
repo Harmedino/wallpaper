@@ -11,6 +11,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import Link from "next/link";
+import { looks, backgrounds, textFonts } from "@/lib/studio-presets";
 import { resolutions } from "@/lib/constants";
 import { Button } from "./ui/button";
 type Upload = { id: string; width: number; height: number };
@@ -37,7 +38,29 @@ export function Studio() {
       .catch(() => {});
   }, []);
   const [upload, setUpload] = useState<Upload | null>(null);
-  const [rights, setRights] = useState(false);
+  const [backgroundMode, setBackgroundMode] = useState("crop");
+  const [backgroundColor, setBackgroundColor] = useState("#101a20");
+  const [padding, setPadding] = useState(0.06);
+  const [radius, setRadius] = useState(0);
+  const [rotation, setRotation] = useState(0);
+  const [flip, setFlip] = useState(false);
+  const [flop, setFlop] = useState(false);
+  const [vignette, setVignette] = useState(false);
+  const [look, setLook] = useState("original");
+  const [text, setText] = useState({
+    content: "",
+    font: "sans",
+    size: 0.06,
+    color: "#ffffff",
+    x: 0.5,
+    y: 0.5,
+    align: "center",
+    shadow: true,
+  });
+  const [preview, setPreview] = useState("");
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const previewRef = useRef<string | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
@@ -60,10 +83,6 @@ export function Studio() {
   const target = custom ? { width, height } : resolutions[index];
   async function choose(file?: File) {
     if (!file) return;
-    if (!rights) {
-      setError("Confirm that you have the rights to process this image first.");
-      return;
-    }
     if (
       !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
       file.size > caps.uploadMb * 1024 * 1024
@@ -77,10 +96,10 @@ export function Studio() {
     try {
       const form = new FormData();
       form.set("file", file);
-      form.set("rights", "true");
       const r = await fetch("/api/uploads", { method: "POST", body: form });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
+      setPreview("");
       setUpload(d);
       setX(0.5);
       setY(0.5);
@@ -90,6 +109,122 @@ export function Studio() {
       setBusy(false);
     }
   }
+  async function useBackground(template: string) {
+    setBusy(true);
+    setError("");
+    setJob(null);
+    try {
+      const r = await fetch("/api/studio/background", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setPreview("");
+      setUpload(d);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Background could not be created",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  function resetEdits() {
+    setBrightness(1);
+    setSaturation(1);
+    setContrast(1);
+    setCinematic(false);
+    setSharpen(false);
+    setDenoise(false);
+    setVignette(false);
+    setLook("original");
+    setBackgroundMode("crop");
+    setRotation(0);
+    setFlip(false);
+    setFlop(false);
+    setText({
+      content: "",
+      font: "sans",
+      size: 0.06,
+      color: "#ffffff",
+      x: 0.5,
+      y: 0.5,
+      align: "center",
+      shadow: true,
+    });
+    setPadding(0.06);
+    setRadius(0);
+    setBackgroundColor("#101a20");
+    setAi(false);
+    setX(0.5);
+    setY(0.5);
+  }
+  const previewOptions = JSON.stringify({
+    ...target,
+    x,
+    y,
+    brightness,
+    saturation,
+    contrast,
+    sharpen,
+    denoise,
+    cinematic,
+    backgroundMode,
+    backgroundColor,
+    padding,
+    radius,
+    rotation,
+    flip,
+    flop,
+    vignette,
+    text,
+    format: "webp",
+  });
+  useEffect(() => {
+    if (!upload) return;
+    const c = new AbortController();
+    const timer = setTimeout(async () => {
+      setPreviewBusy(true);
+      setPreviewError("");
+      try {
+        const r = await fetch("/api/studio/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uploadId: upload.id,
+            options: JSON.parse(previewOptions),
+          }),
+          signal: c.signal,
+        });
+        if (!r.ok) throw new Error((await r.json()).error);
+        const next = URL.createObjectURL(await r.blob());
+        if (c.signal.aborted) {
+          URL.revokeObjectURL(next);
+          return;
+        }
+        if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+        previewRef.current = next;
+        setPreview(next);
+      } catch (e) {
+        if (!c.signal.aborted)
+          setPreviewError(e instanceof Error ? e.message : "Preview failed");
+      } finally {
+        if (!c.signal.aborted) setPreviewBusy(false);
+      }
+    }, 650);
+    return () => {
+      clearTimeout(timer);
+      c.abort();
+    };
+  }, [upload?.id, previewOptions]);
+  useEffect(
+    () => () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    },
+    [],
+  );
   async function processImage() {
     if (!upload) return;
     setError("");
@@ -113,6 +248,15 @@ export function Studio() {
             sharpen,
             denoise,
             cinematic,
+            backgroundMode,
+            backgroundColor,
+            padding,
+            radius,
+            rotation,
+            flip,
+            flop,
+            vignette,
+            text,
           },
         }),
       });
@@ -160,7 +304,7 @@ export function Studio() {
         </p>
       </div>
       <div className="studio-grid">
-        <div>
+        <div className={"studio-canvas-column " + (job ? "has-result" : "")}>
           <div className="panel">
             <div className="flex justify-between text-xs text-slate-400 mb-5">
               <span>01 / YOUR CANVAS</span>
@@ -170,15 +314,26 @@ export function Studio() {
                 </span>
               )}
             </div>
-            <label className="flex items-start gap-3 text-xs leading-5 mb-5">
-              <input
-                type="checkbox"
-                checked={rights}
-                onChange={(e) => setRights(e.target.checked)}
-              />
-              I own this image or have permission to upload, modify, and process
-              it.
-            </label>
+            <div className="studio-template-strip">
+              <p className="text-xs muted mb-3">
+                Start from a background — or upload your own photo
+              </p>
+              <div className="grid grid-cols-4 gap-2">
+                {backgrounds.map((b) => (
+                  <button
+                    key={b.id}
+                    disabled={busy || !!processing}
+                    onClick={() => useBackground(b.id)}
+                    className="studio-template"
+                    style={{
+                      background: `linear-gradient(135deg,${b.a},${b.b})`,
+                    }}
+                  >
+                    <span>{b.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <input
               className="hidden"
               ref={fileRef}
@@ -221,12 +376,13 @@ export function Studio() {
                   }}
                 >
                   <img
-                    src={`/api/uploads/${upload.id}/image`}
-                    alt="Your original with selected crop"
+                    src={preview || `/api/uploads/${upload.id}/image`}
+                    alt="Edited wallpaper preview"
                     className="w-full h-full object-cover"
                     style={{
-                      objectPosition: `${x * 100}% ${y * 100}%`,
-                      filter: `brightness(${brightness}) saturate(${saturation}) contrast(${contrast})`,
+                      objectPosition: preview
+                        ? "center"
+                        : `${x * 100}% ${y * 100}%`,
                     }}
                   />
                 </div>
@@ -265,6 +421,16 @@ export function Studio() {
                   Choose another image
                 </Button>
               </>
+            )}
+            {previewError && (
+              <p className="error text-xs mt-3">{previewError}</p>
+            )}
+            {upload && (
+              <p className="text-xs muted mt-4" aria-live="polite">
+                {previewBusy
+                  ? "Updating your preview…"
+                  : "Live preview · changes are included in your download"}
+              </p>
             )}
             <p className="text-xs muted flex items-center gap-2 mt-6 mb-0">
               <ShieldCheck size={15} className="text-teal-300" /> Private by
@@ -421,6 +587,230 @@ export function Studio() {
               clearly labeled as resized. AI cannot guarantee recovery of
               missing detail.
             </p>
+          </div>
+          <div className="studio-edit-section">
+            <h2>Try a look</h2>
+            <div className="grid grid-cols-3 gap-2">
+              {looks.map((p) => (
+                <button
+                  key={p.id}
+                  className={"studio-look " + (look === p.id ? "active" : "")}
+                  onClick={() => {
+                    setLook(p.id);
+                    setBrightness(p.brightness);
+                    setSaturation(p.saturation);
+                    setContrast(p.contrast);
+                    setCinematic(p.cinematic);
+                  }}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <button
+                className="chip"
+                onClick={() => {
+                  setText({
+                    ...text,
+                    content: "MAKE SPACE\nFOR WHAT MATTERS",
+                    font: "serif",
+                    size: 0.07,
+                  });
+                  setVignette(true);
+                }}
+              >
+                Try quote layout
+              </button>
+              <button
+                className="chip"
+                onClick={() => {
+                  setText({
+                    ...text,
+                    content: "FOCUS.",
+                    font: "mono",
+                    size: 0.1,
+                  });
+                  setBackgroundMode("blur");
+                  setPadding(0.12);
+                  setRadius(0.08);
+                }}
+              >
+                Try focus layout
+              </button>
+              <button className="chip" onClick={resetEdits}>
+                Reset edits
+              </button>
+            </div>
+          </div>
+          <div className="studio-edit-section">
+            <h2>Background & framing</h2>
+            <label className="field mb-4">
+              Photo layout
+              <select
+                value={backgroundMode}
+                onChange={(e) => setBackgroundMode(e.target.value)}
+              >
+                <option value="crop">Fill screen · crop to fit</option>
+                <option value="blur">Full photo · blurred backdrop</option>
+                <option value="solid">Full photo · solid backdrop</option>
+              </select>
+            </label>
+            {backgroundMode === "solid" && (
+              <label className="field mb-4">
+                Backdrop color
+                <input
+                  aria-label="Backdrop color"
+                  type="color"
+                  value={backgroundColor}
+                  onChange={(e) => setBackgroundColor(e.target.value)}
+                />
+              </label>
+            )}
+            {backgroundMode !== "crop" && (
+              <>
+                <label className="field mb-4">
+                  Frame spacing
+                  <input
+                    type="range"
+                    min="0"
+                    max=".2"
+                    step=".01"
+                    value={padding}
+                    onChange={(e) => setPadding(+e.target.value)}
+                  />
+                </label>
+                <label className="field mb-4">
+                  Rounded photo corners
+                  <input
+                    type="range"
+                    min="0"
+                    max=".25"
+                    step=".01"
+                    value={radius}
+                    onChange={(e) => setRadius(+e.target.value)}
+                  />
+                </label>
+              </>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="chip"
+                onClick={() => setRotation((rotation + 90) % 360)}
+              >
+                Rotate 90°
+              </button>
+              <button
+                className={"chip " + (flop ? "active" : "")}
+                onClick={() => setFlop(!flop)}
+              >
+                Flip horizontal
+              </button>
+              <button
+                className={"chip " + (flip ? "active" : "")}
+                onClick={() => setFlip(!flip)}
+              >
+                Flip vertical
+              </button>
+            </div>
+            <label className="flex gap-2 mt-4 items-center">
+              <input
+                type="checkbox"
+                checked={vignette}
+                onChange={(e) => setVignette(e.target.checked)}
+              />
+              Soft vignette
+            </label>
+          </div>
+          <div className="studio-edit-section">
+            <h2>Make a statement</h2>
+            <label className="field mb-4">
+              Wallpaper text
+              <textarea
+                rows={3}
+                maxLength={400}
+                value={text.content}
+                placeholder="Your words, your wallpaper…"
+                onChange={(e) => setText({ ...text, content: e.target.value })}
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <label className="field">
+                Font
+                <select
+                  value={text.font}
+                  onChange={(e) => setText({ ...text, font: e.target.value })}
+                >
+                  {Object.entries(textFonts).map(([id, f]) => (
+                    <option key={id} value={id}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                Text color
+                <input
+                  type="color"
+                  value={text.color}
+                  onChange={(e) => setText({ ...text, color: e.target.value })}
+                />
+              </label>
+            </div>
+            <label className="field mb-4">
+              Text size
+              <input
+                type="range"
+                min=".02"
+                max=".2"
+                step=".005"
+                value={text.size}
+                onChange={(e) => setText({ ...text, size: +e.target.value })}
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <label className="field">
+                Text horizontal position
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step=".01"
+                  value={text.x}
+                  onChange={(e) => setText({ ...text, x: +e.target.value })}
+                />
+              </label>
+              <label className="field">
+                Text vertical position
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step=".01"
+                  value={text.y}
+                  onChange={(e) => setText({ ...text, y: +e.target.value })}
+                />
+              </label>
+            </div>
+            <label className="field mb-4">
+              Text alignment
+              <select
+                value={text.align}
+                onChange={(e) => setText({ ...text, align: e.target.value })}
+              >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+            <label className="flex gap-2 items-center">
+              <input
+                type="checkbox"
+                checked={text.shadow}
+                onChange={(e) => setText({ ...text, shadow: e.target.checked })}
+              />
+              Text shadow
+            </label>
           </div>
           <div className="space-y-5">
             {[

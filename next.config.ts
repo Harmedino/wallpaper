@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
   serverExternalPackages: ["sharp"],
+  outputFileTracingIncludes: { "/api/**": ["./public/fonts/*"] },
   poweredByHeader: false,
   async headers() {
     return [

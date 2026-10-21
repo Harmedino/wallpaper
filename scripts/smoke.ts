@@ -143,9 +143,9 @@ const dm = await sharp(Buffer.from(await dl.arrayBuffer())).metadata();
 assert.equal(dm.width, 1920);
 assert.equal(dm.height, 1080);
 assert.equal(dm.format, "png");
-assert.equal(dl.headers.get("x-wallpaper-license"), "cc0");
+assert.equal(dl.headers.get("x-wallpaper-license"), w.license);
 const attr = await request(`/api/wallpapers/${w.id}/attribution`);
-assert.match(await attr.text(), /License: cc0/);
+assert.ok((await attr.text()).includes(`License: ${w.license}`));
 const d = await request("/api/uploads/" + upload.id, {
   method: "DELETE",
   headers: { Cookie: owner },

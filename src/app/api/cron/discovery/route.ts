@@ -45,7 +45,7 @@ export async function GET(req: Request) {
       ok: true,
       runs,
       message:
-        "Discovery completed. New candidates require administrator rights review.",
+        "Discovery completed. Eligible Commons originals publish automatically; unclear rights remain unpublished.",
     });
   } catch (e) {
     console.error(

@@ -1,3 +1,6 @@
+import { ensureStarterCatalog } from "@/lib/starter-catalog";
+import { createBackground } from "@/lib/backgrounds";
+import { nextWeeklyRun } from "@/lib/scheduling";
 import { processNextJob } from "@/lib/processing";
 import { NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
@@ -98,6 +101,7 @@ async function handle(
       return json({
         ok: true,
         database: "MongoDB",
+        revision: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "local",
         ai: process.env.AI_PROVIDER || "none",
       });
     }
@@ -127,6 +131,48 @@ async function handle(
     }
     if (area === "wallpapers") {
       if (!id) {
+        await ensureStarterCatalog();
+        const initial = await database
+          .collection("settings")
+          .updateOne(
+            { _id: "initial-photo-discovery" as any },
+            { $setOnInsert: { status: "running", startedAt: new Date() } },
+            { upsert: true },
+          );
+        if (initial.upsertedCount)
+          after(async () => {
+            try {
+              await db.source.upsert({
+                where: { id: "commons" },
+                create: {
+                  id: "commons",
+                  enabled: true,
+                  schedule: "weekly",
+                  intervalHours: 168,
+                  nextRunAt: nextWeeklyRun(),
+                  query: "mountain landscape",
+                },
+                update: {},
+              });
+              await discover("commons", "mountain landscape");
+              await database
+                .collection("settings")
+                .updateOne(
+                  { _id: "initial-photo-discovery" as any },
+                  { $set: { status: "completed" } },
+                );
+            } catch (e) {
+              await database.collection("settings").updateOne(
+                { _id: "initial-photo-discovery" as any },
+                {
+                  $set: {
+                    status: "failed",
+                    error: e instanceof Error ? e.message : "Discovery failed",
+                  },
+                },
+              );
+            }
+          });
         const q = (url.searchParams.get("q") || "").slice(0, 100),
           category = url.searchParams.get("category"),
           color = url.searchParams.get("color"),
@@ -255,6 +301,54 @@ async function handle(
       const { originalKey, thumbKey, hash, ...publicWallpaper } = w;
       return json(publicWallpaper);
     }
+    if (area === "studio" && id === "background" && req.method === "POST") {
+      const user = await session(true);
+      await rateLimit(`upload:${user!.id}`, 20);
+      const input = z
+        .object({ template: z.enum(["aurora", "sunset", "midnight", "paper"]) })
+        .parse(await req.json());
+      const clean = await validateImage(await createBackground(input.template));
+      const key = `private/${user!.id}/${randomUUID()}.webp`;
+      await put(key, clean.bytes);
+      const cap = await limits();
+      const row = await db.upload.create({
+        data: {
+          ownerId: user!.id,
+          key,
+          width: clean.width,
+          height: clean.height,
+          hash: clean.hash,
+          expiresAt: new Date(Date.now() + cap.retentionHours * 3600000),
+        },
+      });
+      return json({ id: row.id, width: row.width, height: row.height }, 201);
+    }
+    if (area === "studio" && id === "preview" && req.method === "POST") {
+      const user = await session(true);
+      await rateLimit(`preview:${user!.id}`, 60, 60);
+      const input = await req.json();
+      const upload = await db.upload.findUnique({
+        where: {
+          id: String(input.uploadId),
+          ownerId: user!.id,
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (!upload) throw new HttpError(404, "Upload not found");
+      const options = optionsSchema.parse(input.options);
+      let scale = Math.min(1, 800 / Math.max(options.width, options.height));
+      scale = Math.max(scale, 320 / Math.min(options.width, options.height));
+      const bytes = await render(await get(upload.key), {
+        ...options,
+        width: Math.round(options.width * scale),
+        height: Math.round(options.height * scale),
+        format: "webp",
+        ai: false,
+      });
+      return image(bytes, "image/webp", undefined, {
+        "Cache-Control": "private, no-store",
+      });
+    }
     if (area === "uploads") {
       const u = await session(true);
       if (req.method === "POST") {
@@ -281,8 +375,7 @@ async function handle(
         const form = await new Response(payload, {
           headers: { "Content-Type": req.headers.get("content-type") || "" },
         }).formData();
-        if (form.get("rights") !== "true")
-          throw new HttpError(400, "Confirm your rights to upload this image");
+
         const file = form.get("file");
         if (!(file instanceof File) || file.size > cap.uploadMb * 1024 * 1024)
           throw new HttpError(400, "Upload a JPG, PNG or WebP under 20 MB");
@@ -595,7 +688,7 @@ async function handle(
             id: z.string(),
             decision: z.enum(["approve", "reject"]),
             note: z.string().min(10).max(2000),
-            rightsConfirmed: z.boolean(),
+            rightsConfirmed: z.boolean().optional(),
             category: z.string().min(1).max(100),
           })
           .parse(await req.json());
@@ -603,7 +696,7 @@ async function handle(
           where: { id: input.id, status: "pending" },
         });
         if (input.decision === "approve") {
-          if (!input.rightsConfirmed || !allowedLicense(c.license))
+          if (!allowedLicense(c.license))
             throw new HttpError(
               400,
               "Verify rights, attribution, license and any personality/trademark restrictions first",
@@ -695,7 +788,7 @@ async function handle(
                 (v) => v.startsWith("https://"),
                 "Use an HTTPS license URL",
               ),
-            rightsConfirmed: z.literal(true),
+            rightsConfirmed: z.boolean().optional(),
           })
           .parse(await req.json());
         if (!allowedLicense(input.license))

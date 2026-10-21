@@ -48,7 +48,9 @@ const schemas: Record<string, Record<string, unknown>> = {
   candidates: {
     bsonType: "object",
     required: ["id", "externalId", "sourceId", "status", "imageUrl", "license"],
-    properties: { status: { enum: ["pending", "approved", "rejected"] } },
+    properties: {
+      status: { enum: ["pending", "approved", "rejected", "duplicate"] },
+    },
   },
 };
 for (const [name, schema] of Object.entries(schemas)) {
@@ -79,26 +81,24 @@ if (
 ) {
   const nextRunAt = nextWeeklyRun();
   for (const id of ["commons", "nasa", "openverse"]) {
-    await database
-      .collection("sources")
-      .updateOne(
-        { id },
-        {
-          $setOnInsert: {
-            id,
-            createdAt: new Date(),
-            query: id === "nasa" ? "nebula" : "landscape",
-            intervalHours: 168,
-            ...(id === "openverse" ? { enabled: false } : {}),
-          },
-          $set: {
-            schedule: "weekly",
-            nextRunAt,
-            ...(id !== "openverse" ? { enabled: true } : {}),
-          },
+    await database.collection("sources").updateOne(
+      { id },
+      {
+        $setOnInsert: {
+          id,
+          createdAt: new Date(),
+          query: id === "nasa" ? "nebula" : "landscape",
+          intervalHours: 168,
+          ...(id === "openverse" ? { enabled: false } : {}),
         },
-        { upsert: true },
-      );
+        $set: {
+          schedule: "weekly",
+          nextRunAt,
+          ...(id !== "openverse" ? { enabled: true } : {}),
+        },
+      },
+      { upsert: true },
+    );
   }
   await database
     .collection("migrations")

@@ -10,8 +10,10 @@ import {
 import { Gallery } from "@/components/gallery";
 import { Button } from "@/components/ui/button";
 export const dynamic = "force-dynamic";
+import { ensureStarterCatalog } from "@/lib/starter-catalog";
 import { db } from "@/lib/db";
 export default async function Home() {
+  await ensureStarterCatalog();
   const hero = await db.wallpaper.findMany({
     where: { published: true, featured: true },
     take: 1,

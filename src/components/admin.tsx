@@ -41,7 +41,6 @@ export function Admin() {
   const [licenseUrl, setLicenseUrl] = useState(
     "https://creativecommons.org/publicdomain/zero/1.0/",
   );
-  const [rights, setRights] = useState(false);
   async function load() {
     try {
       const d = await api("admin");
@@ -380,10 +379,11 @@ export function Admin() {
                   </Button>
                 </div>
                 <p className="text-xs muted leading-6 mt-5">
-                  Imports are limited per request. No automatic publication.
-                  Openverse originals on hosts outside the approved fetch list
-                  are excluded; extend IMAGE_ALLOWED_HOSTS only after checking
-                  the host and its terms.
+                  Imports are limited per request. Clearly licensed Commons
+                  originals can publish automatically; unclear rights remain
+                  excluded. Openverse originals on hosts outside the approved
+                  fetch list are excluded; extend IMAGE_ALLOWED_HOSTS only after
+                  checking the host and its terms.
                 </p>
               </div>
               <div className="space-y-4">
@@ -444,7 +444,6 @@ export function Admin() {
                         license,
                         sourceUrl,
                         licenseUrl,
-                        rightsConfirmed: rights,
                       }),
                     "Wallpaper published.",
                   );
@@ -493,17 +492,7 @@ export function Admin() {
                     )}
                   </select>
                 </label>
-                <label className="flex gap-3 items-center text-xs">
-                  <input
-                    type="checkbox"
-                    checked={rights}
-                    required
-                    onChange={(e) => setRights(e.target.checked)}
-                  />
-                  I verified redistribution rights, attribution and
-                  non-copyright restrictions.
-                </label>
-                <Button disabled={busy || !rights}>Publish wallpaper</Button>
+                <Button disabled={busy}>Publish wallpaper</Button>
               </form>
             </div>
           )}
@@ -598,7 +587,6 @@ function Candidate({
   act: (fn: () => Promise<any>, message?: string) => void;
 }) {
   const [note, setNote] = useState("");
-  const [rights, setRights] = useState(false);
   const [category, setCategory] = useState(categories[0]);
   return (
     <div className="panel mb-5">
@@ -643,18 +631,10 @@ function Candidate({
           />
         </label>
       </div>
-      <label className="flex items-center gap-3 text-xs mb-5">
-        <input
-          type="checkbox"
-          checked={rights}
-          onChange={(e) => setRights(e.target.checked)}
-        />
-        I verified redistribution, modification, attribution, and any subject or
-        branding restrictions.
-      </label>
+
       <div className="flex gap-3">
         <Button
-          disabled={busy || !rights || note.length < 10}
+          disabled={busy || note.length < 10}
           onClick={() =>
             act(
               () =>
@@ -662,7 +642,7 @@ function Candidate({
                   id: c.id,
                   decision: "approve",
                   note,
-                  rightsConfirmed: rights,
+
                   category,
                 }),
               "Image imported and published.",
@@ -682,7 +662,6 @@ function Candidate({
                   id: c.id,
                   decision: "reject",
                   note,
-                  rightsConfirmed: false,
                   category,
                 }),
               "Candidate rejected.",

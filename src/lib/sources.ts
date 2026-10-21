@@ -1,3 +1,4 @@
+import { publishCandidate } from "./publication";
 import { db } from "./db";
 import { remoteJson, permittedUrl } from "./network";
 import { allowedLicense, licenseUrl } from "./licenses";
@@ -86,6 +87,7 @@ async function runDiscovery(id: string, query: string) {
     }
   } else throw new Error("Unknown provider");
   let added = 0;
+  let published = 0;
   for (const r of rows) {
     if (!allowedLicense(r.license) || r.creator === "Unknown") continue;
     if (
@@ -98,19 +100,32 @@ async function runDiscovery(id: string, query: string) {
     } catch {
       continue;
     }
-    if (await db.candidate.findUnique({ where: { externalId: r.externalId } }))
-      continue;
-    await db.candidate.upsert({
+    const existing = await db.candidate.findUnique({
       where: { externalId: r.externalId },
-      create: {
-        ...r,
-        sourceId: id,
-        status: "pending",
-        licenseUrl: licenseUrl(r.license),
-      },
-      update: {},
     });
-    added++;
+    const candidate =
+      existing ||
+      (await db.candidate.upsert({
+        where: { externalId: r.externalId },
+        create: {
+          ...r,
+          sourceId: id,
+          status: "pending",
+          licenseUrl: licenseUrl(r.license),
+        },
+        update: {},
+      }));
+    if (!existing) added++;
+    if (published < 3 && candidate.status === "pending") {
+      try {
+        if (await publishCandidate(candidate)) published++;
+      } catch (e) {
+        console.error(
+          "Automatic import:",
+          e instanceof Error ? e.message : "Import failed",
+        );
+      }
+    }
   }
   await db.source.update({
     where: { id },

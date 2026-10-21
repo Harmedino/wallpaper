@@ -52,6 +52,20 @@ try {
     await new Promise((r) => setTimeout(r, 200));
   }
   assert.ok(ready, "Test web server did not become ready: " + output);
+  const gallery = await (await fetch(base + "/api/wallpapers")).json();
+  assert.ok(gallery.total >= 9);
+  const starter = gallery.items.find(
+    (w: any) => w.source === "original procedural artwork",
+  );
+  assert.ok(starter);
+  const thumbnail = await fetch(
+    `${base}/api/wallpapers/${starter.id}/thumbnail`,
+  );
+  assert.equal(
+    thumbnail.status,
+    200,
+    "starter image must exist in production storage, not only the database",
+  );
   const cap = await (await fetch(base + "/api/capabilities")).json();
   assert.equal(cap.limits.uploadMb, 4);
   const s = await fetch(base + "/api/session");
@@ -62,7 +76,6 @@ try {
     .png()
     .toBuffer();
   const form = new FormData();
-  form.set("rights", "true");
   form.set(
     "file",
     new Blob([new Uint8Array(image)], { type: "image/png" }),
@@ -94,7 +107,14 @@ try {
     headers: { Cookie: cookie, "Content-Type": "application/json" },
     body: JSON.stringify({
       uploadId,
-      options: { width: 1080, height: 1920, format: "webp", ai: true },
+      options: {
+        width: 1080,
+        height: 1920,
+        format: "webp",
+        ai: true,
+        backgroundMode: "blur",
+        text: { content: "STAY CURIOUS", font: "serif", size: 0.08 },
+      },
     }),
   });
   assert.equal(created.status, 201, await created.clone().text());
