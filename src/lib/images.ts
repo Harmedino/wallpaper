@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { textFonts } from "./studio-presets";
+import { createBackground } from "./backgrounds";
+import { backgroundIds, textFonts } from "./studio-presets";
 import sharp from "sharp";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -22,7 +23,12 @@ export const optionsSchema = z
     denoise: z.boolean().default(false),
     cinematic: z.boolean().default(false),
     ai: z.boolean().default(false),
-    backgroundMode: z.enum(["crop", "blur", "solid"]).default("crop"),
+    backgroundMode: z.enum(["crop", "blur", "solid", "art"]).default("crop"),
+    backgroundTemplate: z.enum(backgroundIds).default("aurora"),
+    grid: z
+      .enum(["single", "duo", "triptych", "quad", "mosaic"])
+      .default("single"),
+    photoIds: z.array(z.string().min(1).max(100)).max(5).default([]),
     backgroundColor: z
       .string()
       .regex(/^#[0-9a-fA-F]{6}$/)
@@ -38,7 +44,14 @@ export const optionsSchema = z
     text: z
       .object({
         content: z.string().max(400),
-        font: z.enum(["sans", "serif", "mono"]).default("sans"),
+        font: z
+          .enum(
+            Object.keys(textFonts) as [
+              keyof typeof textFonts,
+              ...Array<keyof typeof textFonts>,
+            ],
+          )
+          .default("sans"),
         size: z.number().min(0.02).max(0.2).default(0.06),
         color: z
           .string()
@@ -84,7 +97,18 @@ export async function validateImage(bytes: Buffer) {
     hash: createHash("sha256").update(clean).digest("hex"),
   };
 }
-export async function render(bytes: Buffer, input: unknown) {
+export type TextBounds = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+export async function render(
+  bytes: Buffer,
+  input: unknown,
+  onTextBounds?: (bounds: TextBounds) => void,
+  photos: Buffer[] = [],
+) {
   const o = optionsSchema.parse(input);
   let original = bytes;
   if (o.rotation || o.flip || o.flop) {
@@ -104,7 +128,7 @@ export async function render(bytes: Buffer, input: unknown) {
   let image = sharp(original, { limitInputPixels: 40_000_000 })
     .extract({ left, top, width: w, height: h })
     .resize(o.width, o.height);
-  if (o.backgroundMode !== "crop") {
+  if (o.backgroundMode !== "crop" || o.grid !== "single") {
     const inset = Math.round(Math.min(o.width, o.height) * o.padding);
     let foreground = await sharp(original)
       .resize(o.width - inset * 2, o.height - inset * 2, { fit: "inside" })
@@ -123,17 +147,76 @@ export async function render(bytes: Buffer, input: unknown) {
         .toBuffer();
     }
     image =
-      o.backgroundMode === "blur"
-        ? sharp(original).resize(o.width, o.height, { fit: "cover" }).blur(30)
-        : sharp({
-            create: {
-              width: o.width,
-              height: o.height,
-              channels: 4,
-              background: o.backgroundColor,
-            },
-          });
-    image = image.composite([{ input: foreground, gravity: "centre" }]);
+      o.backgroundMode === "art"
+        ? sharp(await createBackground(o.backgroundTemplate, o.width, o.height))
+        : o.backgroundMode === "blur"
+          ? sharp(original).resize(o.width, o.height, { fit: "cover" }).blur(30)
+          : sharp({
+              create: {
+                width: o.width,
+                height: o.height,
+                channels: 4,
+                background: o.backgroundColor,
+              },
+            });
+    if (o.grid === "single")
+      image = image.composite([{ input: foreground, gravity: "centre" }]);
+    else {
+      const cells: Record<string, number[][]> = {
+        duo: [
+          [0, 0, 0.5, 1],
+          [0.5, 0, 0.5, 1],
+        ],
+        triptych: [
+          [0, 0, 1 / 3, 1],
+          [1 / 3, 0, 1 / 3, 1],
+          [2 / 3, 0, 1 / 3, 1],
+        ],
+        quad: [
+          [0, 0, 0.5, 0.5],
+          [0.5, 0, 0.5, 0.5],
+          [0, 0.5, 0.5, 0.5],
+          [0.5, 0.5, 0.5, 0.5],
+        ],
+        mosaic: [
+          [0, 0, 0.6, 1],
+          [0.6, 0, 0.4, 0.5],
+          [0.6, 0.5, 0.4, 0.5],
+        ],
+      };
+      const sources = [original, ...photos];
+      const gap = Math.max(
+        2,
+        Math.round((Math.min(o.width, o.height) * o.padding) / 2),
+      );
+      const tiles = await Promise.all(
+        cells[o.grid].map(async ([cx, cy, cw, ch], i) => {
+          const left = Math.round(cx * o.width) + gap,
+            top = Math.round(cy * o.height) + gap;
+          const tw = Math.max(1, Math.round((cx + cw) * o.width) - left - gap);
+          const th = Math.max(1, Math.round((cy + ch) * o.height) - top - gap);
+          let tile = await sharp(sources[i % sources.length])
+            .resize(tw, th, { fit: "cover", position: "attention" })
+            .ensureAlpha()
+            .png()
+            .toBuffer();
+          if (o.radius)
+            tile = await sharp(tile)
+              .composite([
+                {
+                  input: Buffer.from(
+                    `<svg width="${tw}" height="${th}"><rect width="100%" height="100%" rx="${Math.min(tw, th) * o.radius}" fill="white"/></svg>`,
+                  ),
+                  blend: "dest-in",
+                },
+              ])
+              .png()
+              .toBuffer();
+          return { input: tile, left, top };
+        }),
+      );
+      image = image.composite(tiles);
+    }
     // Composite before applying finishing controls so all layers share the look.
     image = sharp(await image.png().toBuffer());
   }
@@ -177,7 +260,7 @@ export async function render(bytes: Buffer, input: unknown) {
     let lettering = await sharp({
       text: {
         text: `<span foreground="${t.color}">${escape(t.content)}</span>`,
-        font: `${t.font === "serif" ? "DejaVu Serif" : t.font === "mono" ? "DejaVu Sans Mono" : "DejaVu Sans"} ${fontsize}`,
+        font: `${textFonts[t.font].family} ${fontsize}`,
         fontfile: path.join(
           process.cwd(),
           "public",
@@ -205,6 +288,12 @@ export async function render(bytes: Buffer, input: unknown) {
     const tm = await sharp(lettering).metadata();
     const tx = Math.round((o.width - tm.width!) * t.x),
       ty = Math.round((o.height - tm.height!) * t.y);
+    onTextBounds?.({
+      left: tx / o.width,
+      top: ty / o.height,
+      width: tm.width! / o.width,
+      height: tm.height! / o.height,
+    });
     if (t.shadow) {
       const shadow = await sharp(lettering)
         .recomb([

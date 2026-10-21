@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { looks, backgrounds, textFonts } from "@/lib/studio-presets";
+import { backgroundSvg } from "@/lib/backgrounds-svg";
 import { resolutions } from "@/lib/constants";
 import { Button } from "./ui/button";
 type Upload = { id: string; width: number; height: number };
@@ -38,6 +39,29 @@ export function Studio() {
       .catch(() => {});
   }, []);
   const [upload, setUpload] = useState<Upload | null>(null);
+  const [backgroundTemplate, setBackgroundTemplate] = useState("aurora");
+  const [sourceKind, setSourceKind] = useState("photo");
+  const [grid, setGrid] = useState("single");
+  const [photos, setPhotos] = useState<Upload[]>([]);
+  const collageRef = useRef<HTMLInputElement>(null);
+  const [textBounds, setTextBounds] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const dragRef = useRef<{
+    x: number;
+    y: number;
+    tx: number;
+    ty: number;
+    size: number;
+    mode: string;
+    width: number;
+    height: number;
+    bw: number;
+    bh: number;
+  } | null>(null);
   const [backgroundMode, setBackgroundMode] = useState("crop");
   const [backgroundColor, setBackgroundColor] = useState("#101a20");
   const [padding, setPadding] = useState(0.06);
@@ -101,6 +125,7 @@ export function Studio() {
       if (!r.ok) throw new Error(d.error);
       setPreview("");
       setUpload(d);
+      setSourceKind("photo");
       setX(0.5);
       setY(0.5);
     } catch (e) {
@@ -109,7 +134,41 @@ export function Studio() {
       setBusy(false);
     }
   }
+  async function addPhotos(files: FileList | null) {
+    if (!files) return;
+    setBusy(true);
+    setError("");
+    try {
+      const added: Upload[] = [];
+      for (const file of Array.from(files).slice(0, 5 - photos.length)) {
+        if (
+          !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+          file.size > caps.uploadMb * 1024 * 1024
+        )
+          throw new Error(`Choose photos under ${caps.uploadMb} MB`);
+        const body = new FormData();
+        body.set("file", file);
+        const r = await fetch("/api/uploads", { method: "POST", body });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        added.push(d);
+      }
+      setPhotos((previous) => [...previous, ...added].slice(0, 5));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not add photos");
+    } finally {
+      setBusy(false);
+      if (collageRef.current) collageRef.current.value = "";
+    }
+  }
   async function useBackground(template: string) {
+    setBackgroundTemplate(template);
+    if (upload && sourceKind === "photo") {
+      setBackgroundMode("art");
+      setJob(null);
+      return;
+    }
+
     setBusy(true);
     setError("");
     setJob(null);
@@ -123,6 +182,8 @@ export function Studio() {
       if (!r.ok) throw new Error(d.error);
       setPreview("");
       setUpload(d);
+      setSourceKind("background");
+      setBackgroundMode("crop");
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Background could not be created",
@@ -141,6 +202,7 @@ export function Studio() {
     setVignette(false);
     setLook("original");
     setBackgroundMode("crop");
+    setGrid("single");
     setRotation(0);
     setFlip(false);
     setFlop(false);
@@ -172,6 +234,9 @@ export function Studio() {
     denoise,
     cinematic,
     backgroundMode,
+    backgroundTemplate,
+    grid,
+    photoIds: photos.map((p) => p.id),
     backgroundColor,
     padding,
     radius,
@@ -199,6 +264,7 @@ export function Studio() {
           signal: c.signal,
         });
         if (!r.ok) throw new Error((await r.json()).error);
+        setTextBounds(JSON.parse(r.headers.get("X-Text-Bounds") || "null"));
         const next = URL.createObjectURL(await r.blob());
         if (c.signal.aborted) {
           URL.revokeObjectURL(next);
@@ -249,6 +315,9 @@ export function Studio() {
             denoise,
             cinematic,
             backgroundMode,
+            backgroundTemplate,
+            grid,
+            photoIds: photos.map((p) => p.id),
             backgroundColor,
             padding,
             radius,
@@ -303,7 +372,7 @@ export function Studio() {
           super-resolution is available when a processing provider is connected.
         </p>
       </div>
-      <div className="studio-grid">
+      <div className={"studio-grid " + (upload ? "has-upload" : "")}>
         <div className={"studio-canvas-column " + (job ? "has-result" : "")}>
           <div className="panel">
             <div className="flex justify-between text-xs text-slate-400 mb-5">
@@ -316,9 +385,9 @@ export function Studio() {
             </div>
             <div className="studio-template-strip">
               <p className="text-xs muted mb-3">
-                Start from a background — or upload your own photo
+                Illustrated backgrounds · your photo stays on top
               </p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {backgrounds.map((b) => (
                   <button
                     key={b.id}
@@ -326,7 +395,8 @@ export function Studio() {
                     onClick={() => useBackground(b.id)}
                     className="studio-template"
                     style={{
-                      background: `linear-gradient(135deg,${b.a},${b.b})`,
+                      backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(backgroundSvg(b.id, 300, 180))}")`,
+                      backgroundSize: "cover",
                     }}
                   >
                     <span>{b.name}</span>
@@ -368,14 +438,18 @@ export function Studio() {
             ) : (
               <>
                 <div
-                  className="bg-black/40 rounded-xl overflow-hidden mx-auto"
+                  className="studio-preview-frame bg-black/40 rounded-xl mx-auto"
                   style={{
+                    ...({
+                      "--canvas-ratio": target.width / target.height,
+                    } as React.CSSProperties),
                     aspectRatio: target.width / target.height,
                     maxHeight: 520,
                     maxWidth: "100%",
                   }}
                 >
                   <img
+                    draggable={false}
                     src={preview || `/api/uploads/${upload.id}/image`}
                     alt="Edited wallpaper preview"
                     className="w-full h-full object-cover"
@@ -385,6 +459,130 @@ export function Studio() {
                         : `${x * 100}% ${y * 100}%`,
                     }}
                   />
+                  {text.content.trim() && textBounds && (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Move text on canvas"
+                      className="studio-text-selection"
+                      style={{
+                        left: `${text.x * (1 - textBounds.width) * 100}%`,
+                        top: `${text.y * (1 - textBounds.height) * 100}%`,
+                        width: `${textBounds.width * 100}%`,
+                        height: `${textBounds.height * 100}%`,
+                      }}
+                      onKeyDown={(e) => {
+                        const delta = e.shiftKey ? 0.05 : 0.01;
+                        if (
+                          [
+                            "ArrowLeft",
+                            "ArrowRight",
+                            "ArrowUp",
+                            "ArrowDown",
+                          ].includes(e.key)
+                        ) {
+                          e.preventDefault();
+                          setText((t) => ({
+                            ...t,
+                            x: Math.max(
+                              0,
+                              Math.min(
+                                1,
+                                t.x +
+                                  (e.key === "ArrowRight"
+                                    ? delta
+                                    : e.key === "ArrowLeft"
+                                      ? -delta
+                                      : 0),
+                              ),
+                            ),
+                            y: Math.max(
+                              0,
+                              Math.min(
+                                1,
+                                t.y +
+                                  (e.key === "ArrowDown"
+                                    ? delta
+                                    : e.key === "ArrowUp"
+                                      ? -delta
+                                      : 0),
+                              ),
+                            ),
+                          }));
+                        }
+                      }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        const rect =
+                          e.currentTarget.parentElement!.getBoundingClientRect();
+                        dragRef.current = {
+                          x: e.clientX,
+                          y: e.clientY,
+                          tx: text.x,
+                          ty: text.y,
+                          size: text.size,
+                          mode: (e.target as HTMLElement).dataset.resize
+                            ? "resize"
+                            : "move",
+                          width: rect.width,
+                          height: rect.height,
+                          bw: textBounds.width,
+                          bh: textBounds.height,
+                        };
+                      }}
+                      onPointerMove={(e) => {
+                        const d = dragRef.current;
+                        if (!d) return;
+                        const dx = e.clientX - d.x,
+                          dy = e.clientY - d.y;
+                        const clamp = (n: number, min = 0, max = 1) =>
+                          Math.max(min, Math.min(max, n));
+                        setText((t) =>
+                          d.mode === "resize"
+                            ? {
+                                ...t,
+                                size: clamp(
+                                  d.size *
+                                    (1 +
+                                      (dx + dy) /
+                                        Math.max(
+                                          30,
+                                          d.bw * d.width + d.bh * d.height,
+                                        )),
+                                  0.02,
+                                  0.2,
+                                ),
+                              }
+                            : {
+                                ...t,
+                                x: clamp(
+                                  d.tx + dx / Math.max(1, d.width * (1 - d.bw)),
+                                ),
+                                y: clamp(
+                                  d.ty +
+                                    dy / Math.max(1, d.height * (1 - d.bh)),
+                                ),
+                              },
+                        );
+                      }}
+                      onPointerUp={() => {
+                        dragRef.current = null;
+                      }}
+                      onPointerCancel={() => {
+                        dragRef.current = null;
+                      }}
+                    >
+                      <span className="studio-text-hint">
+                        Drag text · resize corner
+                      </span>
+                      <span
+                        data-resize="true"
+                        className="studio-text-resize"
+                        aria-label="Resize text"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-5 mt-5">
                   <label className="field">
@@ -644,6 +842,143 @@ export function Studio() {
             </div>
           </div>
           <div className="studio-edit-section">
+            <h2>Design ideas</h2>
+            <div className="grid grid-cols-2 gap-2 mb-5">
+              {[
+                {
+                  name: "Travel postcard",
+                  bg: "mountains",
+                  font: "serifItalic",
+                  words: "Somewhere beautiful",
+                  y: 0.86,
+                },
+                {
+                  name: "Retro album",
+                  bg: "retro",
+                  font: "condensed",
+                  words: "GOOD DAYS AHEAD",
+                  y: 0.12,
+                },
+                {
+                  name: "Moon journal",
+                  bg: "orbit",
+                  font: "light",
+                  words: "Stay curious",
+                  y: 0.8,
+                },
+                {
+                  name: "Botanical notes",
+                  bg: "botanical",
+                  font: "serif",
+                  words: "Room to grow",
+                  y: 0.15,
+                },
+                {
+                  name: "Creative desktop",
+                  bg: "memphis",
+                  font: "bold",
+                  words: "MAKE SOMETHING",
+                  y: 0.8,
+                },
+                {
+                  name: "Focus mode",
+                  bg: "blueprint",
+                  font: "monoBold",
+                  words: "ONE THING AT A TIME",
+                  y: 0.85,
+                },
+              ].map((idea) => (
+                <button
+                  key={idea.name}
+                  className="chip"
+                  onClick={() => {
+                    useBackground(idea.bg);
+                    setPadding(0.15);
+                    setRadius(0.04);
+                    setText({
+                      ...text,
+                      content: idea.words,
+                      font: idea.font,
+                      size: 0.07,
+                      x: 0.5,
+                      y: idea.y,
+                    });
+                  }}
+                >
+                  {idea.name}
+                </button>
+              ))}
+            </div>
+            <button
+              className="chip mb-4"
+              onClick={() => {
+                setIndex(2);
+                setCustom(false);
+              }}
+            >
+              Convert to 4K · 3840 × 2160
+            </button>
+            <h2>Photo grids</h2>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {[
+                ["single", "Single photo"],
+                ["duo", "Side by side"],
+                ["triptych", "Three panels"],
+                ["quad", "2 × 2 grid"],
+                ["mosaic", "Editorial mosaic"],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  className={"chip " + (grid === id ? "active" : "")}
+                  onClick={() => {
+                    setGrid(id);
+                    if (id !== "single" && backgroundMode === "crop")
+                      setBackgroundMode("art");
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs muted mb-3">
+              Add up to five photos. With one photo, the layout repeats it as a
+              pattern.
+            </p>
+            <input
+              ref={collageRef}
+              className="hidden"
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp"
+              aria-label="Add collage photos"
+              onChange={(e) => addPhotos(e.target.files)}
+            />
+            <button
+              className="chip mb-3"
+              disabled={busy || photos.length >= 5}
+              onClick={() => collageRef.current?.click()}
+            >
+              Add photos to grid ({photos.length}/5)
+            </button>
+            <div className="flex gap-2 flex-wrap mb-5">
+              {photos.map((p, i) => (
+                <button
+                  key={p.id}
+                  className="relative"
+                  onClick={() => setPhotos(photos.filter((q) => q.id !== p.id))}
+                  aria-label={`Remove grid photo ${i + 1}`}
+                >
+                  <img
+                    src={`/api/uploads/${p.id}/image`}
+                    alt={`Grid photo ${i + 1}`}
+                    className="w-14 h-14 object-cover rounded"
+                  />
+                  <span className="absolute right-0 top-0 bg-black rounded px-1">
+                    ×
+                  </span>
+                </button>
+              ))}
+            </div>
             <h2>Background & framing</h2>
             <label className="field mb-4">
               Photo layout
@@ -654,6 +989,7 @@ export function Studio() {
                 <option value="crop">Fill screen · crop to fit</option>
                 <option value="blur">Full photo · blurred backdrop</option>
                 <option value="solid">Full photo · solid backdrop</option>
+                <option value="art">Full photo · illustrated backdrop</option>
               </select>
             </label>
             {backgroundMode === "solid" && (
@@ -724,6 +1060,32 @@ export function Studio() {
           </div>
           <div className="studio-edit-section">
             <h2>Make a statement</h2>
+            <p className="text-xs muted mb-4">
+              Drag text on the preview to move it. Drag its corner to resize.
+              Arrow keys nudge the selected text; Shift moves faster.
+            </p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                className="chip"
+                onClick={() => setText({ ...text, x: 0.5, y: 0.5 })}
+              >
+                Center text
+              </button>
+              <button
+                className="chip"
+                onClick={() =>
+                  setText({ ...text, content: text.content.toUpperCase() })
+                }
+              >
+                UPPERCASE
+              </button>
+              <button
+                className="chip"
+                onClick={() => setText({ ...text, content: "" })}
+              >
+                Remove text
+              </button>
+            </div>
             <label className="field mb-4">
               Wallpaper text
               <textarea

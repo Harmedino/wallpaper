@@ -118,3 +118,66 @@ test("automatic photo publication requires unambiguous Commons provenance and re
   ])
     assert.ok(!canAutoPublish({ ...good, ...delta }));
 });
+
+test("illustrated backdrops keep the source photo and collage uses distinct images", async () => {
+  const red = await sharp({
+    create: { width: 500, height: 500, channels: 3, background: "#ff0000" },
+  })
+    .png()
+    .toBuffer();
+  const blue = await sharp({
+    create: { width: 500, height: 500, channels: 3, background: "#0000ff" },
+  })
+    .png()
+    .toBuffer();
+  const framed = await render(red, {
+    width: 800,
+    height: 400,
+    format: "png",
+    backgroundMode: "art",
+    backgroundTemplate: "mountains",
+    padding: 0.15,
+  });
+  const pixel = async (bytes: Buffer, left: number, top: number) =>
+    sharp(bytes)
+      .extract({ left, top, width: 1, height: 1 })
+      .removeAlpha()
+      .raw()
+      .toBuffer();
+  assert.equal((await pixel(framed, 400, 200))[0], 255);
+  const backdrop = await pixel(framed, 0, 0);
+  assert.notEqual(backdrop[1], 0);
+  const collage = await render(
+    red,
+    { width: 800, height: 400, format: "png", grid: "duo", padding: 0.05 },
+    undefined,
+    [blue],
+  );
+  assert.deepEqual([...(await pixel(collage, 200, 200))], [255, 0, 0]);
+  assert.deepEqual([...(await pixel(collage, 600, 200))], [0, 0, 255]);
+});
+test("every bundled font renders and reports bounds for direct canvas manipulation", async () => {
+  const { textFonts } = await import("../src/lib/studio-presets");
+  const input = await sharp({
+    create: { width: 640, height: 360, channels: 3, background: "black" },
+  })
+    .png()
+    .toBuffer();
+  for (const font of Object.keys(textFonts)) {
+    let bounds:
+      { left: number; top: number; width: number; height: number } | undefined;
+    const output = await render(
+      input,
+      {
+        width: 640,
+        height: 360,
+        text: { content: "Design freely", font, x: 0.8, y: 0.2, size: 0.1 },
+      },
+      (b) => {
+        bounds = b;
+      },
+    );
+    assert.ok(bounds && bounds.width > 0 && bounds.left + bounds.width <= 1);
+    assert.ok((await sharp(output).stats()).channels[0].max > 100, font);
+  }
+});

@@ -1,3 +1,4 @@
+import { studioPhotos } from "./studio-photos";
 import { db, database, mongo } from "./db";
 import { get, put } from "./storage";
 import { render, optionsSchema } from "./images";
@@ -46,7 +47,12 @@ export async function processNextJob(jobId?: string) {
         }
       }
       await db.job.update({ where: { id: job.id }, data: { progress: 75 } });
-      const result = await render(bytes, options);
+      const result = await render(
+        bytes,
+        options,
+        undefined,
+        await studioPhotos(options.photoIds, upload.ownerId),
+      );
       const key = `private/${upload.ownerId}/${job.id}.${options.format}`;
       await put(
         key,

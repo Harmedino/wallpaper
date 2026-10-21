@@ -53,13 +53,75 @@ export const backgrounds = [
   { id: "sunset", name: "Sunset", a: "#f8a17a", b: "#4c3674" },
   { id: "midnight", name: "Midnight", a: "#071322", b: "#2d6087" },
   { id: "paper", name: "Warm paper", a: "#ece0c7", b: "#c5a887" },
+  { id: "mountains", name: "Alpine escape", a: "#bacfcb", b: "#263c53" },
+  { id: "waves", name: "Ocean waves", a: "#a5e1e0", b: "#12475e" },
+  { id: "orbit", name: "Lunar orbit", a: "#10132f", b: "#61467d" },
+  { id: "botanical", name: "Botanical", a: "#e6e1c7", b: "#789575" },
+  { id: "retro", name: "Retro sun", a: "#eed7b2", b: "#ca745b" },
+  { id: "blueprint", name: "Blueprint", a: "#142f4a", b: "#246080" },
+  { id: "memphis", name: "Playful shapes", a: "#edd4b8", b: "#ce958f" },
+  { id: "arches", name: "Desert arches", a: "#e2bb91", b: "#9b5548" },
 ] as const;
 export const textFonts = {
-  sans: { label: "Modern sans", family: "Studio Sans", file: "StudioSans.ttf" },
+  monoItalic: {
+    label: "Typewriter italic",
+    family: "DejaVu Sans Mono Oblique",
+    file: "DejaVuSansMono-Oblique.ttf",
+  },
+  monoBold: {
+    label: "Code bold",
+    family: "DejaVu Sans Mono Bold",
+    file: "DejaVuSansMono-Bold.ttf",
+  },
+  serifBoldItalic: {
+    label: "Magazine italic",
+    family: "DejaVu Serif Bold Italic",
+    file: "DejaVuSerif-BoldItalic.ttf",
+  },
+  serifItalic: {
+    label: "Literary italic",
+    family: "DejaVu Serif Italic",
+    file: "DejaVuSerif-Italic.ttf",
+  },
+  serifBold: {
+    label: "Classic bold",
+    family: "DejaVu Serif Bold",
+    file: "DejaVuSerif-Bold.ttf",
+  },
+  condensed: {
+    label: "Condensed headline",
+    family: "DejaVu Sans Condensed Bold",
+    file: "DejaVuSansCondensed-Bold.ttf",
+  },
+  italic: {
+    label: "Sans italic",
+    family: "DejaVu Sans Oblique",
+    file: "DejaVuSans-Oblique.ttf",
+  },
+  light: {
+    label: "Airy light",
+    family: "DejaVu Sans ExtraLight",
+    file: "DejaVuSans-ExtraLight.ttf",
+  },
+  bold: {
+    label: "Poster bold",
+    family: "DejaVu Sans Bold",
+    file: "DejaVuSans-Bold.ttf",
+  },
+  sans: { label: "Modern sans", family: "DejaVu Sans", file: "StudioSans.ttf" },
   serif: {
     label: "Editorial serif",
-    family: "Studio Serif",
+    family: "DejaVu Serif",
     file: "StudioSerif.ttf",
   },
-  mono: { label: "Typewriter", family: "Studio Mono", file: "StudioMono.ttf" },
+  mono: {
+    label: "Typewriter",
+    family: "DejaVu Sans Mono",
+    file: "StudioMono.ttf",
+  },
 };
+
+export const backgroundIds = backgrounds.map((b) => b.id) as [
+  string,
+  ...string[],
+];

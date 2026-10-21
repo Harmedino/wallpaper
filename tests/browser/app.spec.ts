@@ -127,3 +127,99 @@ test("Studio templates, text and framing export a real edited wallpaper without 
   expect(meta.width).toBe(1920);
   expect(meta.height).toBe(1080);
 });
+
+test("mobile editor preserves photos, pins preview and supports text dragging and grid photos", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const ready = page.waitForResponse((r) =>
+    r.url().endsWith("/api/capabilities"),
+  );
+  await page.goto("/studio");
+  await ready;
+  const red = await sharp({
+    create: { width: 640, height: 480, channels: 3, background: "#ff0000" },
+  })
+    .png()
+    .toBuffer();
+  await page
+    .getByLabel("Upload image", { exact: true })
+    .setInputFiles({ name: "red.png", mimeType: "image/png", buffer: red });
+  await expect(page.getByAltText("Edited wallpaper preview")).toBeVisible();
+  let uploads = 0;
+  page.on("request", (r) => {
+    if (r.url().endsWith("/api/studio/background")) uploads++;
+  });
+  await page
+    .getByRole("button", { name: "Alpine escape", exact: true })
+    .click();
+  await expect(
+    page.getByRole("combobox", { name: "Photo layout", exact: true }),
+  ).toHaveValue("art");
+  expect(uploads).toBe(0);
+  await page
+    .getByLabel("Wallpaper text", { exact: true })
+    .fill("MAKE IT YOURS");
+  const selection = page.getByRole("button", { name: "Move text on canvas" });
+  await expect(selection).toBeVisible({ timeout: 15000 });
+  const before = await selection.boundingBox();
+  await page.mouse.move(
+    before!.x + before!.width / 2,
+    before!.y + before!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    before!.x + before!.width / 2 + 30,
+    before!.y + before!.height / 2 + 25,
+    { steps: 5 },
+  );
+  await page.mouse.up();
+  await expect(
+    page.getByLabel("Text horizontal position", { exact: true }),
+  ).not.toHaveValue("0.5");
+  const sizeBefore = await page
+    .getByLabel("Text size", { exact: true })
+    .inputValue();
+  const handle = await page
+    .getByLabel("Resize text", { exact: true })
+    .boundingBox();
+  await page.mouse.move(handle!.x + 10, handle!.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(handle!.x + 30, handle!.y + 25, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.getByLabel("Text size", { exact: true })).not.toHaveValue(
+    sizeBefore,
+  );
+  await page.getByRole("button", { name: "2 × 2 grid", exact: true }).click();
+  await page
+    .getByLabel("Add collage photos", { exact: true })
+    .setInputFiles({ name: "second.png", mimeType: "image/png", buffer: red });
+  await expect(page.getByAltText("Grid photo 1")).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "Text alignment", exact: true })
+    .scrollIntoViewIfNeeded();
+  const rect = await page.locator(".studio-preview-frame").boundingBox();
+  expect(rect!.y).toBeGreaterThanOrEqual(0);
+  expect(rect!.y).toBeLessThan(20);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBeTruthy();
+  await page
+    .getByRole("button", { name: "Convert to 4K", exact: false })
+    .click();
+  await page.screenshot({ path: "/tmp/studio-mobile-editor.png" });
+  await page
+    .getByRole("button", { name: "Create my wallpaper", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Your new perspective is ready." }),
+  ).toBeVisible({ timeout: 30000 });
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download finished wallpaper" }).click();
+  const download = await downloadPromise;
+  const metadata = await sharp((await download.path())!).metadata();
+  expect(metadata.width).toBe(3840);
+  expect(metadata.height).toBe(2160);
+});

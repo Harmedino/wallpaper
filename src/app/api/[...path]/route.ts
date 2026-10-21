@@ -1,3 +1,6 @@
+import { studioPhotos } from "@/lib/studio-photos";
+import { backgroundIds } from "@/lib/studio-presets";
+import type { TextBounds } from "@/lib/images";
 import { ensureStarterCatalog } from "@/lib/starter-catalog";
 import { createBackground } from "@/lib/backgrounds";
 import { nextWeeklyRun } from "@/lib/scheduling";
@@ -305,7 +308,7 @@ async function handle(
       const user = await session(true);
       await rateLimit(`upload:${user!.id}`, 20);
       const input = z
-        .object({ template: z.enum(["aurora", "sunset", "midnight", "paper"]) })
+        .object({ template: z.enum(backgroundIds) })
         .parse(await req.json());
       const clean = await validateImage(await createBackground(input.template));
       const key = `private/${user!.id}/${randomUUID()}.webp`;
@@ -338,15 +341,25 @@ async function handle(
       const options = optionsSchema.parse(input.options);
       let scale = Math.min(1, 800 / Math.max(options.width, options.height));
       scale = Math.max(scale, 320 / Math.min(options.width, options.height));
-      const bytes = await render(await get(upload.key), {
-        ...options,
-        width: Math.round(options.width * scale),
-        height: Math.round(options.height * scale),
-        format: "webp",
-        ai: false,
-      });
+      let textBounds: TextBounds | null = null;
+      const photos = await studioPhotos(options.photoIds, user!.id);
+      const bytes = await render(
+        await get(upload.key),
+        {
+          ...options,
+          width: Math.round(options.width * scale),
+          height: Math.round(options.height * scale),
+          format: "webp",
+          ai: false,
+        },
+        (bounds) => {
+          textBounds = bounds;
+        },
+        photos,
+      );
       return image(bytes, "image/webp", undefined, {
         "Cache-Control": "private, no-store",
+        "X-Text-Bounds": JSON.stringify(textBounds),
       });
     }
     if (area === "uploads") {
@@ -455,6 +468,7 @@ async function handle(
         const options = optionsSchema.parse(input.options);
         if (options.width * options.height > cap.outputMegapixels * 1000000)
           throw new HttpError(400, "Output exceeds administrator pixel limit");
+        await studioPhotos(options.photoIds, u!.id);
         const job = await db.job.create({
           data: {
             uploadId: upload.id,
