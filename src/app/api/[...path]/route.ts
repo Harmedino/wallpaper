@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { processNextJob } from "@/lib/processing";
+import { NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { limits, limitSchema } from "@/lib/limits";
 import { db, database, mongo } from "@/lib/db";
@@ -11,15 +12,30 @@ import {
   checkPassword,
   sign,
 } from "@/lib/auth";
-import { get, put, remove, usage } from "@/lib/storage";
+import { get, put, remove, usage, storageProvider } from "@/lib/storage";
 import { render, validateImage, optionsSchema } from "@/lib/images";
 import { attribution, allowedLicense } from "@/lib/licenses";
+import { nextDiscoveryRun } from "@/lib/scheduling";
 import { discover } from "@/lib/sources";
 import { remote } from "@/lib/network";
 import { z } from "zod";
 import sharp from "sharp";
 import { randomUUID } from "node:crypto";
 export const runtime = "nodejs";
+export const maxDuration = 300;
+function startVercelJob(id: string) {
+  if (process.env.VERCEL)
+    after(async () => {
+      try {
+        await processNextJob(id);
+      } catch (e) {
+        console.error(
+          "Post-response processing:",
+          e instanceof Error ? e.message : "Unknown error",
+        );
+      }
+    });
+}
 export const dynamic = "force-dynamic";
 function json(value: unknown, status = 200) {
   return NextResponse.json(value, { status });
@@ -357,6 +373,7 @@ async function handle(
             options,
           },
         });
+        startVercelJob(job.id);
         return json({ id: job.id }, 201);
       }
       const job = await db.job.findUnique({ where: { id, ownerId: u!.id } });
@@ -378,6 +395,12 @@ async function handle(
           { "Cache-Control": "private, no-store" },
         );
       }
+      if (
+        (job.status === "queued" && job.availableAt <= new Date()) ||
+        (job.status === "processing" &&
+          job.lockedAt < new Date(Date.now() - 15 * 60000))
+      )
+        startVercelJob(job.id);
       const { resultKey, ...publicJob } = job;
       return json(publicJob);
     }
@@ -420,7 +443,7 @@ async function handle(
           workerHeartbeat: await database
             .collection("settings")
             .findOne({ key: "workerHeartbeat" }, { projection: { _id: 0 } }),
-          storage: process.env.STORAGE_PROVIDER || "local",
+          storage: storageProvider(),
         });
       }
       if (id === "limits" && req.method === "POST") {
@@ -468,6 +491,7 @@ async function handle(
             }),
           },
         });
+        startVercelJob(job.id);
         return json({ id: job.id });
       }
       if (id === "apply-result" && req.method === "POST") {
@@ -544,13 +568,14 @@ async function handle(
             id: z.enum(["openverse", "commons", "nasa"]),
             query: z.string().min(1).max(100),
             enabled: z.boolean(),
-            intervalHours: z.number().int().min(6).max(720),
+            schedule: z.enum(["weekly", "interval"]).default("weekly"),
+            intervalHours: z.number().int().min(6).max(720).default(168),
           })
           .parse(await req.json());
         await db.source.upsert({
           where: { id: input.id },
-          create: input,
-          update: input,
+          create: { ...input, nextRunAt: nextDiscoveryRun(input) },
+          update: { ...input, nextRunAt: nextDiscoveryRun(input) },
         });
         return json({ ok: true });
       }

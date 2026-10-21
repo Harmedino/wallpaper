@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { nextWeeklyRun } from "../src/lib/scheduling";
 import sharp from "sharp";
 import { db, ensureIndexes, mongo } from "../src/lib/db";
 import { validateImage } from "../src/lib/images";
@@ -70,13 +71,15 @@ for (const id of ["openverse", "commons", "nasa"])
     where: { id },
     create: {
       id,
-      enabled: false,
+      enabled: id !== "openverse",
+      schedule: "weekly",
+      nextRunAt: nextWeeklyRun(),
       query: id === "nasa" ? "nebula" : "landscape",
-      intervalHours: 24,
+      intervalHours: 168,
     },
     update: {},
   });
 console.log(
-  "Seeded 9 original CC0 artworks; external discovery remains opt-in.",
+  "Seeded 9 original CC0 artworks; Commons/NASA use the weekly schedule; Openverse is opt-in.",
 );
 await mongo.close();

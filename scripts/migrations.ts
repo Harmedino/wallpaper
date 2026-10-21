@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { database, ensureIndexes, mongo } from "../src/lib/db";
+import { nextWeeklyRun } from "../src/lib/scheduling";
 // MongoDB migration 001. Idempotent and additive: validates new writes and indexes
 // existing collections without resetting data. Run before deploying app changes.
 const schemas: Record<string, Record<string, unknown>> = {
@@ -70,4 +71,40 @@ await database
 console.log(
   "Migration 001: MongoDB collection validation and indexes applied.",
 );
+// Migration 002 applies the requested weekly schedule once, preserving later admin edits.
+if (
+  !(await database
+    .collection("migrations")
+    .findOne({ version: "002-weekly-discovery" }))
+) {
+  const nextRunAt = nextWeeklyRun();
+  for (const id of ["commons", "nasa", "openverse"]) {
+    await database
+      .collection("sources")
+      .updateOne(
+        { id },
+        {
+          $setOnInsert: {
+            id,
+            createdAt: new Date(),
+            query: id === "nasa" ? "nebula" : "landscape",
+            intervalHours: 168,
+            ...(id === "openverse" ? { enabled: false } : {}),
+          },
+          $set: {
+            schedule: "weekly",
+            nextRunAt,
+            ...(id !== "openverse" ? { enabled: true } : {}),
+          },
+        },
+        { upsert: true },
+      );
+  }
+  await database
+    .collection("migrations")
+    .insertOne({ version: "002-weekly-discovery", appliedAt: new Date() });
+  console.log(
+    "Migration 002: Commons/NASA scheduled every Monday at 09:00 Africa/Lagos; Openverse enablement preserved.",
+  );
+}
 await mongo.close();

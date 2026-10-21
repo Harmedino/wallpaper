@@ -29,7 +29,8 @@ export function Admin() {
   const [auth, setAuth] = useState(false);
   const [source, setSource] = useState("commons");
   const [query, setQuery] = useState("landscape");
-  const [intervalHours, setInterval] = useState(24);
+  const [intervalHours, setInterval] = useState(168);
+  const [schedule, setSchedule] = useState("weekly");
   const [enabled, setEnabled] = useState(false);
   const [uploadId, setUploadId] = useState("");
   const [title, setTitle] = useState("");
@@ -45,6 +46,15 @@ export function Admin() {
     try {
       const d = await api("admin");
       setData(d);
+      if (!auth) {
+        const config = d.sources.find((s: any) => s.id === source);
+        if (config) {
+          setQuery(config.query);
+          setEnabled(config.enabled);
+          setSchedule(config.schedule || "interval");
+          setInterval(config.intervalHours || 168);
+        }
+      }
       setAuth(true);
     } catch (e) {
       if (auth)
@@ -280,7 +290,8 @@ export function Admin() {
                         );
                         setQuery(s?.query || "landscape");
                         setEnabled(s?.enabled || false);
-                        setInterval(s?.intervalHours || 24);
+                        setInterval(s?.intervalHours || 168);
+                        setSchedule(s?.schedule || "weekly");
                       }}
                     >
                       <option value="commons">Wikimedia Commons</option>
@@ -298,16 +309,37 @@ export function Admin() {
                     />
                   </label>
                   <label>
-                    Schedule interval (hours)
-                    <input
+                    Discovery schedule
+                    <select
                       className="w-full mt-2"
-                      type="number"
-                      min="6"
-                      max="720"
-                      value={intervalHours}
-                      onChange={(e) => setInterval(+e.target.value)}
-                    />
+                      value={schedule}
+                      onChange={(e) => setSchedule(e.target.value)}
+                    >
+                      <option value="weekly">
+                        Every Monday · 9:00 a.m. Lagos
+                      </option>
+                      <option value="interval">Custom interval</option>
+                    </select>
                   </label>
+                  {schedule === "weekly" && (
+                    <p className="text-xs muted">
+                      Runs at 09:00 Africa/Lagos (08:00 UTC). A running worker
+                      and reachable MongoDB are required.
+                    </p>
+                  )}
+                  {schedule === "interval" && (
+                    <label>
+                      Schedule interval (hours)
+                      <input
+                        className="w-full mt-2"
+                        type="number"
+                        min="6"
+                        max="720"
+                        value={intervalHours}
+                        onChange={(e) => setInterval(+e.target.value)}
+                      />
+                    </label>
+                  )}
                   <label className="flex gap-3 items-center">
                     <input
                       type="checkbox"
@@ -328,6 +360,7 @@ export function Admin() {
                           query,
                           enabled,
                           intervalHours,
+                          schedule,
                         }),
                       )
                     }
@@ -359,7 +392,17 @@ export function Admin() {
                     <h3>{s.id}</h3>
                     <p className="text-xs muted">
                       {s.enabled ? "Scheduled" : "Manual only"} ·{" "}
-                      {s.intervalHours}h · {s.query}
+                      {s.schedule === "weekly"
+                        ? "Monday 09:00 Lagos"
+                        : `${s.intervalHours}h`}{" "}
+                      · {s.query}
+                      <br />
+                      Next run:{" "}
+                      {s.enabled && s.nextRunAt
+                        ? new Date(s.nextRunAt).toLocaleString("en-GB", {
+                            timeZone: "Africa/Lagos",
+                          }) + " Lagos"
+                        : "Not scheduled"}
                       <br />
                       Last run:{" "}
                       {s.lastRunAt

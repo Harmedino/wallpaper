@@ -11,7 +11,7 @@ export async function limits() {
   const config = await database
     .collection("settings")
     .findOne({ key: "limits" });
-  return limitSchema.parse(
+  const configured = limitSchema.parse(
     config?.value || {
       uploadMb: 20,
       outputMegapixels: 16,
@@ -20,4 +20,10 @@ export async function limits() {
       retentionHours: 24,
     },
   );
+  return {
+    ...configured,
+    uploadMb: process.env.VERCEL
+      ? Math.min(configured.uploadMb, 4)
+      : configured.uploadMb,
+  };
 }

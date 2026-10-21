@@ -1,3 +1,5 @@
+import { GridFSBucket } from "mongodb";
+import { database, mongo } from "./db";
 import { mkdir, readFile, writeFile, unlink, readdir } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -10,7 +12,17 @@ import {
 const root = path.resolve(
   /* turbopackIgnore: true */ process.env.STORAGE_DIR || ".data/media",
 );
-const remote = () => process.env.STORAGE_PROVIDER === "r2";
+export function storageProvider() {
+  const configured = process.env.STORAGE_PROVIDER || "local";
+  return process.env.VERCEL && configured === "local" ? "mongodb" : configured;
+}
+const remote = () => storageProvider() === "r2";
+const grid = () => storageProvider() === "mongodb";
+async function bucket() {
+  await mongo.connect();
+  return new GridFSBucket(database, { bucketName: "media" });
+}
+
 function client() {
   return new S3Client({
     region: "auto",
@@ -32,6 +44,20 @@ function safe(key: string) {
 }
 export async function put(key: string, body: Buffer, type = "image/webp") {
   safe(key);
+  if (grid()) {
+    const store = await bucket();
+    const previous = await store.find({ filename: key }).toArray();
+    const upload = store.openUploadStream(key, {
+      metadata: { contentType: type },
+    });
+    await new Promise<void>((resolve, reject) => {
+      upload.on("error", reject);
+      upload.on("finish", resolve);
+      upload.end(body);
+    });
+    for (const old of previous) await store.delete(old._id);
+    return;
+  }
   if (remote()) {
     await client().send(
       new PutObjectCommand({
@@ -49,6 +75,22 @@ export async function put(key: string, body: Buffer, type = "image/webp") {
 }
 export async function get(key: string) {
   safe(key);
+  if (grid()) {
+    const store = await bucket();
+    const [file] = await store
+      .find({ filename: key })
+      .sort({ uploadDate: -1 })
+      .limit(1)
+      .toArray();
+    if (!file)
+      throw Object.assign(new Error("Media file not found"), {
+        code: "ENOENT",
+      });
+    const chunks: Buffer[] = [];
+    for await (const chunk of store.openDownloadStream(file._id))
+      chunks.push(Buffer.from(chunk));
+    return Buffer.concat(chunks);
+  }
   if (remote()) {
     const r = await client().send(
       new GetObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key }),
@@ -59,6 +101,12 @@ export async function get(key: string) {
 }
 export async function remove(key: string) {
   safe(key);
+  if (grid()) {
+    const store = await bucket();
+    for (const file of await store.find({ filename: key }).toArray())
+      await store.delete(file._id);
+    return;
+  }
   if (remote())
     await client().send(
       new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET, Key: key }),
@@ -69,6 +117,22 @@ export async function remove(key: string) {
     });
 }
 export async function usage() {
+  if (grid()) {
+    await mongo.connect();
+    const [total] = await database
+      .collection("media.files")
+      .aggregate([
+        {
+          $group: {
+            _id: null,
+            bytes: { $sum: "$length" },
+            objects: { $sum: 1 },
+          },
+        },
+      ])
+      .toArray();
+    return { bytes: total?.bytes || 0, objects: total?.objects || 0 };
+  }
   let bytes = 0,
     objects = 0;
   if (remote()) {

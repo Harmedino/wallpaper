@@ -17,7 +17,10 @@
     "test:smoke": "tsx scripts/smoke.ts",
     "test:browser": "playwright test",
     "test:admin": "tsx scripts/admin-smoke.ts",
-    "test:db-recovery": "tsx scripts/database-recovery.ts"
+    "test:db-recovery": "tsx scripts/database-recovery.ts",
+    "test:scheduler": "tsx scripts/scheduler-smoke.ts",
+    "test:storage": "tsx scripts/storage-smoke.ts",
+    "test:vercel": "tsx scripts/vercel-smoke.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1000.0",
